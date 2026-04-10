@@ -1,6 +1,9 @@
 export interface Task {
   id: string;
+  title: string;
   description: string;
+  dependsOn: string[];
+  outputFile: string;
   status: "pending" | "in_progress" | "completed" | "failed";
 }
 
