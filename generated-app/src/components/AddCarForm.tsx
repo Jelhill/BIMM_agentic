@@ -1,37 +1,50 @@
 import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Box,
   TextField,
   Button,
-  Box,
+  Typography,
+  Paper,
   Alert,
 } from '@mui/material';
 import { useCars } from '../hooks/useCars';
-import { CreateCarInput } from '../types/car';
+import type { CreateCarInput } from '../types/car';
 
 interface AddCarFormProps {
-  open: boolean;
-  onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
+interface FormData {
+  make: string;
+  model: string;
+  year: string;
+  color: string;
+  image: string;
+}
+
+interface FormErrors {
+  make?: string;
+  model?: string;
+  year?: string;
+  color?: string;
+  image?: string;
+}
+
+export const AddCarForm: React.FC<AddCarFormProps> = ({ onSuccess }) => {
   const { addCar } = useCars();
-  const [formData, setFormData] = useState<CreateCarInput>({
+  const [formData, setFormData] = useState<FormData>({
     make: '',
     model: '',
-    year: new Date().getFullYear(),
+    year: '',
     color: '',
-    imageUrl: '',
+    image: '',
   });
-  const [errors, setErrors] = useState<Partial<CreateCarInput>>({});
+  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<CreateCarInput> = {};
+    const newErrors: FormErrors = {};
 
     if (!formData.make.trim()) {
       newErrors.make = 'Make is required';
@@ -41,46 +54,45 @@ export const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
       newErrors.model = 'Model is required';
     }
 
-    if (!formData.year || formData.year < 1900 || formData.year > new Date().getFullYear() + 1) {
-      newErrors.year = 'Please enter a valid year';
+    if (!formData.year.trim()) {
+      newErrors.year = 'Year is required';
+    } else {
+      const yearNum = parseInt(formData.year);
+      if (isNaN(yearNum) || yearNum < 1886 || yearNum > new Date().getFullYear() + 1) {
+        newErrors.year = 'Please enter a valid year';
+      }
     }
 
     if (!formData.color.trim()) {
       newErrors.color = 'Color is required';
     }
 
-    if (formData.imageUrl && !isValidUrl(formData.imageUrl)) {
-      newErrors.imageUrl = 'Please enter a valid URL';
+    if (formData.image && !isValidUrl(formData.image)) {
+      newErrors.image = 'Please enter a valid URL';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const isValidUrl = (url: string): boolean => {
+  const isValidUrl = (string: string): boolean => {
     try {
-      new URL(url);
+      new URL(string);
       return true;
     } catch {
       return false;
     }
   };
 
-  const handleInputChange = (field: keyof CreateCarInput) => (
+  const handleInputChange = (field: keyof FormData) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = field === 'year' ? parseInt(event.target.value, 10) || 0 : event.target.value;
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    // Clear error for this field
+    setFormData({ ...formData, [field]: event.target.value });
     if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: undefined,
-      }));
+      setErrors({ ...errors, [field]: undefined });
+    }
+    if (submitSuccess) {
+      setSubmitSuccess(false);
     }
   };
 
@@ -92,110 +104,112 @@ export const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
     }
 
     setIsSubmitting(true);
-    setSubmitError(null);
-
+    
     try {
-      await addCar(formData);
-      handleClose();
+      const carInput: CreateCarInput = {
+        make: formData.make.trim(),
+        model: formData.model.trim(),
+        year: parseInt(formData.year),
+        color: formData.color.trim(),
+        image: formData.image.trim() || undefined,
+      };
+
+      await addCar(carInput);
+      
+      setFormData({
+        make: '',
+        model: '',
+        year: '',
+        color: '',
+        image: '',
+      });
+      setSubmitSuccess(true);
+      onSuccess?.();
     } catch (error) {
-      setSubmitError('Failed to add car. Please try again.');
+      console.error('Error adding car:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
-    setFormData({
-      make: '',
-      model: '',
-      year: new Date().getFullYear(),
-      color: '',
-      imageUrl: '',
-    });
-    setErrors({});
-    setSubmitError(null);
-    onClose();
-  };
-
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Add New Car</DialogTitle>
-      <form onSubmit={handleSubmit}>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {submitError && (
-              <Alert severity="error">{submitError}</Alert>
-            )}
-            
-            <TextField
-              label="Make"
-              value={formData.make}
-              onChange={handleInputChange('make')}
-              error={!!errors.make}
-              helperText={errors.make}
-              required
-              fullWidth
-            />
+    <Paper elevation={2} sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
+      <Typography variant="h5" component="h2" gutterBottom>
+        Add New Car
+      </Typography>
+      
+      {submitSuccess && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Car added successfully!
+        </Alert>
+      )}
 
-            <TextField
-              label="Model"
-              value={formData.model}
-              onChange={handleInputChange('model')}
-              error={!!errors.model}
-              helperText={errors.model}
-              required
-              fullWidth
-            />
-
-            <TextField
-              label="Year"
-              type="number"
-              value={formData.year}
-              onChange={handleInputChange('year')}
-              error={!!errors.year}
-              helperText={errors.year}
-              required
-              fullWidth
-              inputProps={{
-                min: 1900,
-                max: new Date().getFullYear() + 1,
-              }}
-            />
-
-            <TextField
-              label="Color"
-              value={formData.color}
-              onChange={handleInputChange('color')}
-              error={!!errors.color}
-              helperText={errors.color}
-              required
-              fullWidth
-            />
-
-            <TextField
-              label="Image URL"
-              value={formData.imageUrl}
-              onChange={handleInputChange('imageUrl')}
-              error={!!errors.imageUrl}
-              helperText={errors.imageUrl}
-              fullWidth
-              placeholder="https://example.com/image.jpg"
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Adding...' : 'Add Car'}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+        <TextField
+          fullWidth
+          label="Make"
+          value={formData.make}
+          onChange={handleInputChange('make')}
+          error={!!errors.make}
+          helperText={errors.make}
+          margin="normal"
+          required
+        />
+        
+        <TextField
+          fullWidth
+          label="Model"
+          value={formData.model}
+          onChange={handleInputChange('model')}
+          error={!!errors.model}
+          helperText={errors.model}
+          margin="normal"
+          required
+        />
+        
+        <TextField
+          fullWidth
+          label="Year"
+          type="number"
+          value={formData.year}
+          onChange={handleInputChange('year')}
+          error={!!errors.year}
+          helperText={errors.year}
+          margin="normal"
+          required
+        />
+        
+        <TextField
+          fullWidth
+          label="Color"
+          value={formData.color}
+          onChange={handleInputChange('color')}
+          error={!!errors.color}
+          helperText={errors.color}
+          margin="normal"
+          required
+        />
+        
+        <TextField
+          fullWidth
+          label="Image URL"
+          value={formData.image}
+          onChange={handleInputChange('image')}
+          error={!!errors.image}
+          helperText={errors.image}
+          margin="normal"
+        />
+        
+        <Button
+          type="submit"
+          fullWidth
+          variant="contained"
+          sx={{ mt: 3, mb: 2 }}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Adding Car...' : 'Add Car'}
+        </Button>
+      </Box>
+    </Paper>
   );
 };

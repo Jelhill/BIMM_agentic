@@ -4,7 +4,7 @@ export interface Car {
   model: string;
   year: number;
   color: string;
-  image: string;
+  image?: string;
 }
 
 export interface CreateCarInput {
@@ -12,7 +12,7 @@ export interface CreateCarInput {
   model: string;
   year: number;
   color: string;
-  image: string;
+  image?: string;
 }
 
 export interface UpdateCarInput {
@@ -24,23 +24,38 @@ export interface UpdateCarInput {
   image?: string;
 }
 
-export interface CarsQueryVariables {
-  limit?: number;
-  offset?: number;
+export interface CarsResponse {
+  cars: Car[];
 }
 
-export interface CarQueryVariables {
-  id: string;
+export interface CarResponse {
+  car: Car;
 }
 
-export interface CreateCarMutationVariables {
-  input: CreateCarInput;
+export interface CreateCarResponse {
+  createCar: Car;
 }
 
-export interface UpdateCarMutationVariables {
-  input: UpdateCarInput;
+export interface UpdateCarResponse {
+  updateCar: Car;
 }
 
-export interface DeleteCarMutationVariables {
-  id: string;
+export interface DeleteCarResponse {
+  deleteCar: {
+    id: string;
+  };
+}
+
+export interface GraphQLError {
+  message: string;
+  locations?: Array<{
+    line: number;
+    column: number;
+  }>;
+  path?: string[];
+}
+
+export interface GraphQLResponse<T> {
+  data?: T;
+  errors?: GraphQLError[];
 }

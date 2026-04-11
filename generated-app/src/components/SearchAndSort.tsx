@@ -1,124 +1,80 @@
 import React from 'react';
-import {
-  Box,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material';
 import { Car } from '../types/car';
 
 interface SearchAndSortProps {
   cars: Car[];
-  onFilteredCarsChange: (cars: Car[]) => void;
+  onFilteredCarsChange: (filteredCars: Car[]) => void;
 }
 
-type SortField = 'year' | 'make';
-type SortDirection = 'asc' | 'desc';
+type SortOption = 'year-asc' | 'year-desc' | 'make-asc' | 'make-desc' | 'model-asc' | 'model-desc';
 
-const SearchAndSort: React.FC<SearchAndSortProps> = ({ cars, onFilteredCarsChange }) => {
+export const SearchAndSort: React.FC<SearchAndSortProps> = ({ cars, onFilteredCarsChange }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [sortField, setSortField] = React.useState<SortField>('year');
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
+  const [sortBy, setSortBy] = React.useState<SortOption>('year-desc');
 
   React.useEffect(() => {
-    let filteredCars = [...cars];
+    let filteredCars = cars.filter(car =>
+      car.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      car.make.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-    // Filter by search term (model, case-insensitive)
-    if (searchTerm.trim()) {
-      filteredCars = filteredCars.filter(car =>
-        car.model.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Sort by selected field and direction
-    filteredCars.sort((a, b) => {
-      let valueA: string | number;
-      let valueB: string | number;
-
-      if (sortField === 'year') {
-        valueA = a.year;
-        valueB = b.year;
-      } else {
-        valueA = a.make.toLowerCase();
-        valueB = b.make.toLowerCase();
-      }
-
-      if (sortDirection === 'asc') {
-        return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
-      } else {
-        return valueA > valueB ? -1 : valueA < valueB ? 1 : 0;
+    const sortedCars = [...filteredCars].sort((a, b) => {
+      switch (sortBy) {
+        case 'year-asc':
+          return a.year - b.year;
+        case 'year-desc':
+          return b.year - a.year;
+        case 'make-asc':
+          return a.make.localeCompare(b.make);
+        case 'make-desc':
+          return b.make.localeCompare(a.make);
+        case 'model-asc':
+          return a.model.localeCompare(b.model);
+        case 'model-desc':
+          return b.model.localeCompare(a.model);
+        default:
+          return 0;
       }
     });
 
-    onFilteredCarsChange(filteredCars);
-  }, [cars, searchTerm, sortField, sortDirection, onFilteredCarsChange]);
-
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  };
-
-  const handleSortFieldChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-    setSortField(event.target.value as SortField);
-  };
-
-  const handleSortDirectionChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newDirection: SortDirection | null
-  ) => {
-    if (newDirection !== null) {
-      setSortDirection(newDirection);
-    }
-  };
+    onFilteredCarsChange(sortedCars);
+  }, [cars, searchTerm, sortBy, onFilteredCarsChange]);
 
   return (
-    <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <TextField
-        label="Search by Model"
-        variant="outlined"
-        value={searchTerm}
-        onChange={handleSearchChange}
-        placeholder="Enter model name..."
-        fullWidth
-      />
-      
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        <FormControl variant="outlined" sx={{ minWidth: 120 }}>
-          <InputLabel>Sort by</InputLabel>
-          <Select
-            value={sortField}
-            onChange={handleSortFieldChange}
-            label="Sort by"
+    <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center">
+        <div className="flex-1">
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+            Search Cars
+          </label>
+          <input
+            type="text"
+            id="search"
+            placeholder="Search by make or model..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div className="md:w-48">
+          <label htmlFor="sort" className="block text-sm font-medium text-gray-700 mb-2">
+            Sort By
+          </label>
+          <select
+            id="sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <MenuItem value="year">Year</MenuItem>
-            <MenuItem value="make">Make</MenuItem>
-          </Select>
-        </FormControl>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2">Order:</Typography>
-          <ToggleButtonGroup
-            value={sortDirection}
-            exclusive
-            onChange={handleSortDirectionChange}
-            aria-label="sort direction"
-            size="small"
-          >
-            <ToggleButton value="asc" aria-label="ascending">
-              {sortField === 'year' ? 'Oldest First' : 'A-Z'}
-            </ToggleButton>
-            <ToggleButton value="desc" aria-label="descending">
-              {sortField === 'year' ? 'Newest First' : 'Z-A'}
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-      </Box>
-    </Box>
+            <option value="year-desc">Year (Newest First)</option>
+            <option value="year-asc">Year (Oldest First)</option>
+            <option value="make-asc">Make (A-Z)</option>
+            <option value="make-desc">Make (Z-A)</option>
+            <option value="model-asc">Model (A-Z)</option>
+            <option value="model-desc">Model (Z-A)</option>
+          </select>
+        </div>
+      </div>
+    </div>
   );
 };
-
-export default SearchAndSort;

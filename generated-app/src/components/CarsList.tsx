@@ -1,62 +1,20 @@
 import React from 'react';
-import { Box, Grid, Typography, CircularProgress, Alert } from '@mui/material';
-import { useCars } from '../hooks/useCars';
+import Grid from '@mui/material/Grid2';
 import { CarCard } from './CarCard';
+import type { Car } from '../types/car';
 
-export const CarsList: React.FC = () => {
-  const { cars, loading, error } = useCars();
+interface CarsListProps {
+  cars: Car[];
+}
 
-  if (loading) {
-    return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          minHeight: '400px' 
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Alert severity="error">
-          Error loading cars: {error.message}
-        </Alert>
-      </Box>
-    );
-  }
-
-  if (cars.length === 0) {
-    return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h6" color="text.secondary">
-          No cars found
-        </Typography>
-      </Box>
-    );
-  }
-
+export const CarsList: React.FC<CarsListProps> = ({ cars }) => {
   return (
-    <Box sx={{ p: 2 }}>
-      <Grid container spacing={3}>
-        {cars.map((car) => (
-          <Grid 
-            item 
-            key={car.id}
-            xs={12}
-            sm={6}
-            md={4}
-            lg={3}
-          >
-            <CarCard car={car} />
-          </Grid>
-        ))}
-      </Grid>
-    </Box>
+    <Grid container spacing={3}>
+      {cars.map((car) => (
+        <Grid key={car.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+          <CarCard car={car} />
+        </Grid>
+      ))}
+    </Grid>
   );
 };

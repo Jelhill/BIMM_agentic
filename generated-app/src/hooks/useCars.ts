@@ -1,48 +1,35 @@
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_CARS, ADD_CAR } from '../apollo/queries';
-import { Car, CreateCarInput } from '../types/car';
+import { GET_CARS, ADD_CAR } from '../graphql/queries';
+import type { Car, CreateCarInput } from '../types/car';
 
-interface UseCarsResult {
+export interface UseCarsReturn {
   cars: Car[];
   loading: boolean;
-  error: any;
+  error: Error | undefined;
   addCar: (input: CreateCarInput) => Promise<void>;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 }
 
-export const useCars = (): UseCarsResult => {
-  const { data, loading, error, refetch } = useQuery(GET_CARS, {
-    variables: { limit: 100, offset: 0 },
-    fetchPolicy: 'cache-and-network',
-  });
+export const useCars = (): UseCarsReturn => {
+  const { data, loading, error, refetch } = useQuery<{ cars: Car[] }>(GET_CARS);
 
   const [addCarMutation] = useMutation(ADD_CAR, {
-    update(cache, { data: mutationResult }) {
-      if (mutationResult?.createCar) {
-        const existingCars = cache.readQuery({ query: GET_CARS });
-        cache.writeQuery({
-          query: GET_CARS,
-          data: {
-            cars: [...(existingCars?.cars || []), mutationResult.createCar],
-          },
-        });
-      }
+    update(cache, { data: mutationData }) {
+      if (!mutationData?.addCar) return;
+      const existing = cache.readQuery<{ cars: Car[] }>({ query: GET_CARS });
+      cache.writeQuery({
+        query: GET_CARS,
+        data: { cars: [...(existing?.cars ?? []), mutationData.addCar] },
+      });
     },
   });
 
   const addCar = async (input: CreateCarInput): Promise<void> => {
-    try {
-      await addCarMutation({
-        variables: { input },
-      });
-    } catch (error) {
-      console.error('Error adding car:', error);
-      throw error;
-    }
+    await addCarMutation({ variables: { input } });
   };
 
   return {
-    cars: data?.cars || [],
+    cars: data?.cars ?? [],
     loading,
     error,
     addCar,

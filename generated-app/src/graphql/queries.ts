@@ -1,4 +1,4 @@
-import { gql } from "@apollo/client";
+import { gql } from '@apollo/client';
 
 export const GET_CARS = gql`
   query GetCars {
@@ -8,44 +8,20 @@ export const GET_CARS = gql`
       model
       year
       color
-      mobile
-      tablet
-      desktop
-    }
-  }
-`;
-
-export const GET_CAR = gql`
-  query GetCar($id: ID!) {
-    car(id: $id) {
-      id
-      make
-      model
-      year
-      color
-      mobile
-      tablet
-      desktop
+      image
     }
   }
 `;
 
 export const ADD_CAR = gql`
-  mutation AddCar(
-    $make: String!
-    $model: String!
-    $year: Int!
-    $color: String!
-  ) {
-    addCar(make: $make, model: $model, year: $year, color: $color) {
+  mutation AddCar($input: AddCarInput!) {
+    addCar(input: $input) {
       id
       make
       model
       year
       color
-      mobile
-      tablet
-      desktop
+      image
     }
   }
 `;

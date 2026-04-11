@@ -1,96 +1,81 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { ApolloProvider } from '@apollo/client';
-import { Container, Typography, Fab, Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import {
+  ThemeProvider,
+  createTheme,
+  CssBaseline,
+  Container,
+  Typography,
+  Box,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+} from '@mui/material';
+import { apolloClient } from './apollo/client';
 import { CarsList } from './components/CarsList';
 import { AddCarForm } from './components/AddCarForm';
-import SearchAndSort from './components/SearchAndSort';
-import { apolloClient } from './graphql/client';
-import { Car } from './types/car';
+import { SearchAndSort } from './components/SearchAndSort';
 import { useCars } from './hooks/useCars';
-
-// Initialize MSW
-if (process.env.NODE_ENV === 'development') {
-  const { worker } = await import('./mocks/browser');
-  worker.start();
-}
+import type { Car } from './types/car';
 
 const theme = createTheme({
   palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
+    primary: { main: '#1976d2' },
+    secondary: { main: '#dc004e' },
   },
 });
 
-const AppContent: React.FC = () => {
-  const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+function CarInventory() {
+  const { cars, loading, error } = useCars();
   const [filteredCars, setFilteredCars] = useState<Car[]>([]);
-  const { cars } = useCars();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const handleOpenAddForm = () => {
-    setIsAddFormOpen(true);
-  };
+  const handleFilteredCarsChange = useCallback((sorted: Car[]) => {
+    setFilteredCars(sorted);
+  }, []);
 
-  const handleCloseAddForm = () => {
-    setIsAddFormOpen(false);
-  };
-
-  const handleFilteredCarsChange = (cars: Car[]) => {
-    setFilteredCars(cars);
-  };
+  const displayCars = cars.length > 0 ? filteredCars : [];
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography variant="h3" component="h1" gutterBottom>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" fontWeight={700}>
           Car Inventory
         </Typography>
-        <Typography variant="h6" color="text.secondary">
-          Manage your car collection
-        </Typography>
+        <Button variant="contained" onClick={() => setAddDialogOpen(true)}>
+          Add Car
+        </Button>
       </Box>
 
-      <SearchAndSort
-        cars={cars}
-        onFilteredCarsChange={handleFilteredCarsChange}
-      />
+      {cars.length > 0 && (
+        <SearchAndSort cars={cars} onFilteredCarsChange={handleFilteredCarsChange} />
+      )}
 
-      <CarsList />
+      {loading && <Typography>Loading cars...</Typography>}
+      {error && <Typography color="error">Error: {error.message}</Typography>}
 
-      <Fab
-        color="primary"
-        aria-label="add car"
-        onClick={handleOpenAddForm}
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-        }}
-      >
-        <AddIcon />
-      </Fab>
+      <CarsList cars={displayCars} />
 
-      <AddCarForm
-        open={isAddFormOpen}
-        onClose={handleCloseAddForm}
-      />
+      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Car</DialogTitle>
+        <DialogContent>
+          <AddCarForm onSuccess={() => setAddDialogOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </Container>
   );
-};
+}
 
-const App: React.FC = () => {
+function App() {
   return (
     <ApolloProvider client={apolloClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AppContent />
+        <CarInventory />
       </ThemeProvider>
     </ApolloProvider>
   );
-};
+}
 
 export default App;
