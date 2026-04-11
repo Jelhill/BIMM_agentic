@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Command } from "commander";
 import dotenv from "dotenv";
@@ -12,8 +12,7 @@ dotenv.config();
 
 /**
  * Extract unique file paths from error messages.
- * TypeScript errors look like: "src/components/Foo.tsx(12,5): error TS2345: ..."
- * Test errors may mention file paths in various formats.
+ * Handles TypeScript errors, vitest FAIL lines, and generic path patterns.
  */
 function extractFailingFiles(errors: string[], projectPath: string): string[] {
   const files = new Set<string>();
@@ -23,6 +22,26 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
     const tsMatch = error.match(/^(.+?)\(\d+,\d+\):\s*error\s+TS/);
     if (tsMatch) {
       const filePath = join(projectPath, tsMatch[1]);
+      if (existsSync(filePath)) {
+        files.add(filePath);
+      }
+      continue;
+    }
+
+    // Match vitest FAIL lines: " FAIL  src/components/Foo.test.tsx"
+    const failMatch = error.match(/FAIL\s+(src\/\S+\.(?:ts|tsx))/);
+    if (failMatch) {
+      const filePath = join(projectPath, failMatch[1]);
+      if (existsSync(filePath)) {
+        files.add(filePath);
+      }
+      continue;
+    }
+
+    // Match "❯" vitest error location: " ❯ src/hooks/useMovies.test.tsx:15:5"
+    const vitestLocMatch = error.match(/❯\s+(src\/\S+\.(?:ts|tsx))(?::\d+)?/);
+    if (vitestLocMatch) {
+      const filePath = join(projectPath, vitestLocMatch[1]);
       if (existsSync(filePath)) {
         files.add(filePath);
       }
@@ -46,14 +65,42 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
  * Get errors relevant to a specific file.
  */
 function getErrorsForFile(filePath: string, allErrors: string[]): string[] {
-  const relativeParts = filePath.split("/");
-  // Try matching by filename or relative path segments
+  // Extract the filename and relative path from src/
+  const srcIdx = filePath.indexOf("src/");
+  const relativePath = srcIdx >= 0 ? filePath.slice(srcIdx) : filePath;
+  const fileName = filePath.split("/").pop() ?? "";
+
   return allErrors.filter((e) =>
-    relativeParts.some((part) => part.endsWith(".ts") || part.endsWith(".tsx")
-      ? e.includes(part)
-      : false
-    ) || e.includes(filePath)
+    e.includes(relativePath) || e.includes(fileName)
   );
+}
+
+/**
+ * Scan the src/ directory for .ts files that contain JSX and rename them to .tsx.
+ * This fixes a common issue where Claude generates JSX in .ts files.
+ */
+function fixTsFilesWithJsx(projectPath: string): void {
+  const srcDir = join(projectPath, "src");
+  if (!existsSync(srcDir)) return;
+
+  function scanDir(dir: string): void {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory() && entry.name !== "node_modules") {
+        scanDir(fullPath);
+      } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) {
+        const content = readFileSync(fullPath, "utf-8");
+        // Check for JSX patterns: <Component, </Component>, <>, </>
+        if (/<[A-Z][a-zA-Z]*[\s/>]/.test(content) || /<\/>/.test(content) || /render\(/.test(content) && /</.test(content)) {
+          const newPath = fullPath.replace(/\.ts$/, ".tsx");
+          renameSync(fullPath, newPath);
+          logger.info(`Renamed ${entry.name} -> ${entry.name.replace(".ts", ".tsx")} (contains JSX)`);
+        }
+      }
+    }
+  }
+
+  scanDir(srcDir);
 }
 
 const program = new Command();
@@ -95,6 +142,9 @@ program
     const boilerplatePath = resolve(process.cwd(), "..");
     const outputPath = resolve(process.cwd(), "../generated-app");
     await generateCode(tasks, boilerplatePath, outputPath);
+
+    // Post-generation: fix .ts files containing JSX
+    fixTsFilesWithJsx(outputPath);
 
     // Phase 4: Validation + retry
     console.log("\n" + "=".repeat(60));
@@ -156,6 +206,9 @@ program
         const fixed = await fixFile(filePath, fileContent, errorsToSend);
         writeFileSync(filePath, fixed, "utf-8");
       }
+
+      // Post-fix: re-check for .ts files with JSX
+      fixTsFilesWithJsx(outputPath);
 
       // Retry validation
       console.log("\n" + "=".repeat(60));

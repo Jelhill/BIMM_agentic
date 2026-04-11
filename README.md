@@ -68,8 +68,14 @@ npm install
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
 
-# 3. Build and run the agent
-npx tsc && node dist/index.js --spec ./spec.txt
+# 3. Run the agent (from the agent/ directory)
+npm run generate
+
+# Or with a custom spec file:
+# npm run dev -- --spec ./my-other-spec.txt
+
+# NOTE: Steps 2-3 must be run from inside the agent/ directory.
+# The agent will generate output into ../generated-app relative to agent/.
 ```
 
 The agent will:

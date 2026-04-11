@@ -9,7 +9,15 @@ CRITICAL RULES:
 - Do NOT include any explanation, preamble, or commentary.
 - The first line of your response should be the first line of the file.
 - The last line of your response should be the last line of the file.
-- Fix ALL the listed errors while preserving the file's original purpose and structure.`;
+- Fix ALL the listed errors while preserving the file's original purpose and structure.
+
+TECHNOLOGY STACK (fixes must comply with these):
+- Vitest for testing: use vi.mock, vi.fn, vi.spyOn from "vitest". NEVER use jest.mock/jest.fn.
+- MUI v6: use Grid2 from "@mui/material/Grid2" with size prop. NOT Grid with xs/sm/md props.
+- MSW v2: use HttpResponse.json() from "msw", graphql.query/mutation from "msw".
+- Apollo Client: use MockedProvider from "@apollo/client/testing" in tests.
+- Import alias: "@/" maps to "src/" (e.g. import Foo from "@/components/Foo").
+- If a file has JSX (including test files that render components), it MUST use .tsx extension.`;
 
 export async function fixFile(
   filePath: string,

@@ -1,27 +1,29 @@
 import { gql } from '@apollo/client';
 
-export const GET_CARS = gql`
-  query GetCars {
-    cars {
+export const GET_MOVIES = gql`
+  query GetMovies {
+    movies {
       id
-      make
-      model
+      title
+      genre
       year
-      color
-      image
+      rating
+      watched
+      poster
     }
   }
 `;
 
-export const ADD_CAR = gql`
-  mutation AddCar($input: AddCarInput!) {
-    addCar(input: $input) {
+export const ADD_MOVIE = gql`
+  mutation AddMovie($input: MovieInput!) {
+    addMovie(input: $input) {
       id
-      make
-      model
+      title
+      genre
       year
-      color
-      image
+      rating
+      watched
+      poster
     }
   }
 `;

@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,7 +21,19 @@ CRITICAL RULES:
 - Do NOT wrap your response in markdown code fences (\`\`\`).
 - Do NOT include any explanation, preamble, or commentary.
 - The first line of your response should be the first line of the file (e.g. an import statement).
-- The last line of your response should be the last line of the file.`;
+- The last line of your response should be the last line of the file.
+
+TECHNOLOGY STACK (you MUST follow these):
+- React 18+ with TypeScript
+- Vite as the build tool
+- MUI v6 (Material UI): Use Grid2 from "@mui/material/Grid2" with size prop (e.g. <Grid2 size={{ xs: 12, md: 6 }}>), NOT the deprecated Grid with xs/sm/md props.
+- Apollo Client for GraphQL
+- MSW v2 for mocking: Use "msw/browser" for setupWorker, "msw/node" for setupServer. Handlers use graphql.query()/graphql.mutation() returning HttpResponse.json().
+- Vitest + React Testing Library for tests: Use "vi.mock", "vi.fn", "vi.spyOn" from "vitest". NEVER use jest.mock/jest.fn/jest.spyOn.
+- Files containing JSX (including tests with <Component />) MUST use .tsx extension, NOT .ts.
+- Import path alias: "@/" maps to "src/" (e.g. import { GET_MOVIES } from "@/graphql/queries").
+- For test files: import { describe, it, expect, vi, beforeEach } from "vitest".
+- Test setup file is at "src/test-setup.ts" which sets up @testing-library/jest-dom/vitest matchers and MSW server.`;
 
 function topologicalSort(tasks: Task[]): Task[] {
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
@@ -88,14 +101,31 @@ export async function generateCode(
   }
   mkdirSync(outputPath, { recursive: true });
 
-  const skip = new Set(["node_modules", ".git", "agent", "generated-app"]);
+  const skip = new Set(["node_modules", ".git", "agent", "generated-app", "generated-app2"]);
   for (const entry of readdirSync(boilerplatePath)) {
-    if (skip.has(entry)) continue;
+    if (skip.has(entry) || entry.startsWith("generated-")) continue;
     const src = join(boilerplatePath, entry);
     const dest = join(outputPath, entry);
     cpSync(src, dest, { recursive: true });
   }
   logger.success(`Copied boilerplate to ${outputPath}`);
+
+  // Remove boilerplate example files that conflict with generated code
+  const boilerplateExamples = [
+    join(outputPath, "src/components/Example.tsx"),
+    join(outputPath, "src/__tests__/Example.test.tsx"),
+  ];
+  for (const exFile of boilerplateExamples) {
+    if (existsSync(exFile)) {
+      rmSync(exFile);
+      logger.info(`Removed boilerplate file: ${exFile}`);
+    }
+  }
+  // Remove empty __tests__ dir if it's now empty
+  const testsDir = join(outputPath, "src/__tests__");
+  if (existsSync(testsDir) && readdirSync(testsDir).length === 0) {
+    rmSync(testsDir, { recursive: true });
+  }
 
   // Sort tasks by dependency order
   const sorted = topologicalSort(tasks);

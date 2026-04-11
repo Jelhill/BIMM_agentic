@@ -59,9 +59,15 @@ export async function validate(projectPath: string): Promise<ValidationResult> {
         line.includes("Error:") ||
         line.includes("expected") ||
         line.includes("AssertionError") ||
+        line.includes("AssertionError") ||
         line.includes("TypeError") ||
         line.includes("ReferenceError") ||
-        line.includes("Cannot find")
+        line.includes("Cannot find") ||
+        line.includes("SyntaxError") ||
+        line.includes("is not defined") ||
+        line.includes("is not a function") ||
+        line.includes("Cannot read properties") ||
+        line.includes("❯ src/")
       ) {
         testErrors.push(line.trim());
       }

@@ -1,240 +1,173 @@
-# Senior Fullstack Engineer — Take-Home Challenge
+# BIMM — Agentic Code Generation CLI
 
-## Agentic Code Generation Workflow
+An AI-powered CLI agent that reads a plain-text feature specification and autonomously generates a complete, working React + TypeScript application. The agent decomposes the spec into an ordered task plan, generates code for each task using Claude, validates the output with TypeScript and test runners, and auto-fixes errors in a retry loop. Built as a 5-phase project demonstrating agentic LLM architecture.
 
-**Time Budget:** 4–6 hours (we respect your time — scope accordingly)
-**Submission Deadline:** 5 business days from receipt
+## Agent Architecture
 
----
-
-## Overview
-
-At our agency, AI-assisted development is a core part of how we build. This challenge tests your ability to design and implement an **agentic workflow** — an AI-powered system that takes a natural-language specification and autonomously generates a working frontend application.
-
-You will build an agent (or multi-agent system) that reads a product specification and produces a **React + TypeScript** application that matches a reference implementation. The agent should plan, scaffold, generate code, and self-validate — not just make a single LLM call and hope for the best.
-
----
-
-## The Boilerplate
-
-A pre-built boilerplate is provided with the full stack already configured. **Your agent should generate code into this existing project structure**, not scaffold from scratch. This lets you focus on the agentic workflow rather than build tooling setup.
-
-### What's Included
+The agent is composed of four modules that run sequentially in a pipeline:
 
 ```
-boilerplate/
-├── src/
-│   ├── main.tsx                   # Entry — boots MSW, wires Apollo + MUI
-│   ├── App.tsx                    # Shell (placeholder for generated code)
-│   ├── types.ts                   # Car interface
-│   ├── test-setup.ts              # Vitest + MSW integration
-│   ├── graphql/
-│   │   ├── client.ts              # Apollo client configured
-│   │   └── queries.ts             # GET_CARS, GET_CAR, ADD_CAR queries/mutations
-│   ├── mocks/
-│   │   ├── data.ts                # 5 seed cars with placeholder images
-│   │   ├── handlers.ts            # MSW GraphQL handlers (GetCars, GetCar, AddCar)
-│   │   ├── browser.ts             # MSW browser setup (dev)
-│   │   └── server.ts              # MSW node setup (tests)
-│   ├── components/
-│   │   └── Example.tsx            # Reference component showing Apollo + MUI usage
-│   └── __tests__/
-│       └── Example.test.tsx       # Reference test showing MockedProvider pattern
-├── public/mockServiceWorker.js    # MSW service worker
-├── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── vitest.config.ts
+spec.txt
+   │
+   ▼
+┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────┐
+│ Planner  │────▶│ Generator │────▶│ Validator │────▶│ Fixer │
+│          │     │           │     │           │     │       │
+│ Calls    │     │ Iterates  │     │ Runs tsc  │     │ Sends │
+│ Claude   │     │ tasks in  │     │ + vitest  │     │ file  │
+│ to make  │     │ dep order,│     │ in the    │     │ + err │
+│ task     │     │ passes    │     │ generated │     │ to    │
+│ list     │     │ dep file  │     │ app dir   │     │Claude │
+│          │     │ context   │     │           │     │       │
+└──────────┘     └───────────┘     └─────┬─────┘     └───┬───┘
+                                         │               │
+                                         │  if errors     │
+                                         │◀───────────────┘
+                                         │
+                                         ▼
+                                   ┌───────────┐
+                                   │ Validator  │
+                                   │ (retry)    │
+                                   └───────────┘
+                                         │
+                                         ▼
+                                   Pass / Fail
 ```
 
-### Tech Stack (pre-configured)
+### Module Details
 
-- React 19 + TypeScript
-- Vite
-- Apollo Client (GraphQL)
-- Material UI (MUI)
-- MSW (Mock Service Worker) for API mocking
-- Vitest + Testing Library for testing
+| Module | File | Responsibility |
+|--------|------|----------------|
+| **Planner** | `agent/src/planner.ts` | Sends the spec to Claude and instructs it to return a JSON array of tasks, each with `id`, `title`, `description`, `dependsOn[]`, and `outputFile`. |
+| **Generator** | `agent/src/generator.ts` | Copies the boilerplate into `/generated-app`, topologically sorts tasks by dependencies, then generates each file by calling Claude with the task description and the contents of dependency files as context. |
+| **Validator** | `agent/src/validator.ts` | Runs `tsc --noEmit` and `vitest run` in the generated app directory. Parses error output and returns a structured `{ passed, errors[], rawOutput }` result. |
+| **Fixer** | `agent/src/fixer.ts` | For each file mentioned in validation errors, sends the file content + errors to Claude with a "fix this file" prompt. Overwrites the file with the corrected version. |
 
-### Quick Start
+### Context Management
+
+- Only **dependency files** are passed as context to the generator (not all previously generated files), preventing token bloat
+- Files over **200 lines** are truncated with a `// ...truncated` note
+- The fixer receives only errors relevant to the specific file being fixed
+
+## How to Run
+
+### Prerequisites
+
+- Node.js 18+
+- An Anthropic API key
+
+### Setup
 
 ```bash
+# 1. Clone the repo and install boilerplate dependencies
 npm install
-npm run dev      # App at localhost:5173
-npm run test     # Run test suite
-npm run typecheck # TypeScript checking
+
+# 2. Set up the agent
+cd agent
+npm install
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+
+# 3. Run the agent (from the agent/ directory)
+npm run generate
+
+# Or with a custom spec file:
+# npm run dev -- --spec ./my-other-spec.txt
+
+# NOTE: Steps 2-3 must be run from inside the agent/ directory.
+# The agent will generate output into ../generated-app relative to agent/.
 ```
 
----
+The agent will:
+1. Plan tasks from `spec.txt`
+2. Generate code into `/generated-app`
+3. Install dependencies in the generated app
+4. Validate (tsc + tests)
+5. Fix any errors and re-validate
 
-## The Reference Application
-
-Your agent's output should be a working **Car Inventory Manager** backed by a mock GraphQL API. It must:
-
-1. **Display a list of cars** fetched via Apollo Client from a mock GraphQL API (GetCars query) served by MSW
-2. **Show responsive car images** — the GraphQL schema includes mobile, tablet, and desktop image URLs. Render the appropriate image based on viewport width:
-   - ≤ 640px → mobile
-   - 641px – 1023px → tablet
-   - ≥ 1024px → desktop
-3. **Use Material UI cards** to present each car (make, model, year, color, image)
-4. **Include an "Add Car" form** that submits via a GraphQL mutation (AddCar)
-5. **Implement sorting and search** — a search bar to filter by model, plus sorting by year or make
-6. **Extract GraphQL logic** into a `useCars()` custom hook
-7. **Include unit tests** for key components
-
-### Mock Data Schema
-
-The boilerplate provides a `Car` type and 5 seed cars:
-
-```typescript
-interface Car {
-  id: string;
-  make: string;
-  model: string;
-  year: number;
-  color: string;
-  mobile: string;
-  tablet: string;
-  desktop: string;
-}
-```
-
-### Optional Extras (the agent can attempt these)
-
-- A `GetCar` query to fetch individual cars
-- A year filter (multi-filter support alongside model search)
-- A reusable `useCarFilters()` hook combining all filter logic
-
----
-
-## What You Must Build
-
-### Your Deliverable: An Agentic Workflow
-
-Build a CLI tool or script (Node.js, Python, or TypeScript) that:
-
-1. **Accepts a natural-language specification as input** (a text file or string describing the app above)
-2. **Plans the implementation** — the agent should decompose the spec into discrete, ordered tasks (e.g., "create useCars hook", "build CarCard component", "write SearchBar")
-3. **Generates the application code** — file by file, with awareness of dependencies between files, into the provided boilerplate
-4. **Self-validates** — the agent should verify its output (e.g., run the test suite, or use a secondary LLM call to review its own code)
-5. **Iterates on failures** — if validation fails, the agent should read the error output and attempt a fix (at least 1 retry loop)
-6. **Outputs a runnable project** — the final result should work with:
+### Verify the generated app
 
 ```bash
-cd generated-app && npm install && npm run dev
+cd ../generated-app
+npm install
+npm run dev       # starts Vite dev server
+npm run test      # runs vitest
+npm run typecheck # runs tsc --noEmit
 ```
 
----
+### Environment Variables
 
-## Architecture Expectations
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key (required) |
 
-We're evaluating **how you design the agentic loop**, not just whether the output compiles.
+## LLM Choices
 
-Your system should demonstrate:
+### Why Claude
 
-| Concept | What We're Looking For |
-|---|---|
-| **Task Decomposition** | The agent breaks the spec into ordered, dependency-aware steps — not one giant prompt |
-| **Tool Use** | The agent calls tools (file write, shell commands, LLM calls) as discrete actions |
-| **Context Management** | The agent passes relevant context between steps without exceeding token limits |
-| **Error Recovery** | The agent reads test or type-check output and feeds errors back into the generation loop |
-| **Prompt Design** | Prompts are structured, specific, and use techniques like few-shot examples or schema enforcement |
+Claude excels at following structured output instructions (e.g., "respond with ONLY JSON, no markdown") which is critical for an agentic code generation pipeline where responses must be machine-parseable. Its large context window (200k tokens) also supports passing multiple dependency files as context without truncation in most cases.
 
-### How You Work Matters
+### Model Selection
 
-Beyond the code itself, we want to see **how you approach the problem**:
+The agent uses **`claude-sonnet-4-20250514`** for all API calls (planning, generation, fixing). Sonnet was chosen as the best balance of:
 
-- **Planned work** — Break your work into clear tickets or tasks before diving in. We want to see evidence of upfront thinking, not just a single "initial commit" with everything.
-- **Clear architecture decisions** — Document why you chose your approach. What tradeoffs did you consider? Why this LLM provider? Why this agent structure?
-- **Meaningful commit history** — Small, focused commits that tell a story. We should be able to read your git log and understand how the project evolved. Avoid a single large commit with all the work.
-- **Iterative development** — Show that you built incrementally — get one piece working, then the next. Not everything at once.
+- **Quality**: Produces correct, well-structured React/TypeScript code with proper imports and type safety
+- **Speed**: Significantly faster than Opus, which matters when making 20+ sequential API calls per run
+- **Cost**: ~$3/M input, $15/M output tokens — roughly 10x cheaper than Opus per run
 
-### Recommended (Not Required) Stack for the Agent
+Opus would produce marginally better code but at 10x the cost and 3-4x the latency, making the validate-fix loop impractical.
 
-- **LLM Provider:** Anthropic (Claude), OpenAI, or any provider — use what you're strongest with
-- **Agent Framework:** LangChain, LangGraph, CrewAI, Mastra, plain function-calling loops — your choice, or roll your own
-- **Tooling:** File system operations, shell execution (vitest, npm), LLM API calls
+## Tradeoffs & Improvements
 
----
+### Current Tradeoffs
 
-## Evaluation Criteria
+- **Single retry**: The fixer only gets one pass. Some multi-file errors (e.g., mismatched imports across files) can't be fixed by patching individual files in isolation
+- **No cross-file awareness in fixer**: The fixer sees one file at a time. If file A imports from file B incorrectly, the fixer can only fix A's code, not coordinate changes across both
+- **Planner non-determinism**: Each run produces a different task plan. The number and granularity of tasks varies, which affects downstream code quality
+- **Generated package.json**: The generator may produce a package.json with different dependency versions than the boilerplate, requiring manual reconciliation
 
-### Primary (70%)
+### What I'd Improve With More Time
 
-| Criteria | Weight | Description |
-|---|---|---|
-| **Agent Design** | 25% | Quality of the agentic loop: planning, execution, validation, retry. Is it a real workflow or a wrapper around a single prompt? |
-| **Output Quality** | 20% | Does the generated app work? Does it meet the functional spec? |
-| **Prompt Engineering** | 15% | Are prompts well-structured? Do they constrain output format and provide the right context at each step? |
-| **Error Handling** | 10% | Does the agent recover from generation failures gracefully? |
+- **Multi-pass fix loop**: Allow 2-3 retry rounds instead of 1, with diminishing returns detection
+- **Cross-file fixer**: Pass all failing files + their errors in a single Claude call for coordinated fixes
+- **Structured output**: Use Claude's tool_use/JSON mode instead of free-text with "respond only in JSON" instructions
+- **Incremental generation**: Skip re-generating files that already pass validation
+- **Caching**: Cache Claude responses by task hash to avoid re-generating identical tasks across runs
+- **Parallel generation**: Generate independent tasks (those with no shared dependencies) concurrently
+- **Pinned task plan**: Allow saving/loading a task plan to ensure deterministic generation across runs
 
-### Secondary (30%)
+## Approximate Cost Per Run
 
-| Criteria | Weight | Description |
-|---|---|---|
-| **Code Quality (of the agent)** | 10% | Is the agent code clean, typed, and well-organized? |
-| **Documentation** | 10% | README explaining architecture decisions, how to run, and tradeoffs |
-| **Creativity** | 10% | Bonus features: multi-agent collaboration, caching, parallel generation, cost optimization |
+| Phase | API Calls | Avg Input Tokens | Avg Output Tokens | Estimated Cost |
+|-------|-----------|-----------------|-------------------|----------------|
+| Planner | 1 | ~2,000 | ~2,500 | $0.04 |
+| Generator | ~18-20 | ~1,500 avg | ~3,000 avg | $1.00 |
+| Fixer | 1-3 | ~2,000 avg | ~3,000 avg | $0.15 |
+| **Total** | **~22** | | | **~$1.20** |
 
----
+Costs based on `claude-sonnet-4-20250514` pricing: $3/M input tokens, $15/M output tokens. Actual costs vary by run due to non-deterministic planning.
 
-## Submission Requirements
+## Project Structure
 
-1. **A Git repository** (GitHub, GitLab, or zipped) containing:
-   - The agent source code
-   - A `README.md` with setup instructions, architecture overview, and design decisions
-   - A sample spec file (the natural-language input your agent consumes)
-   - A sample output directory (a generated app we can run)
-
-2. **A `.env.example` file** listing which API keys your agent needs (see the provided `.env.example` for the format). We will supply our own keys when running your agent.
-
-3. **A short write-up** (can be in the README) covering:
-   - Which LLM(s) you used and why
-   - Your agent architecture (a diagram is welcome)
-   - What worked well and what you'd improve with more time
-   - Approximate cost per run (tokens used, API cost)
-
-4. **Working demo:** We will run your agent with your sample spec and verify the output compiles and runs. We may also **modify the spec slightly** to test generalization.
-
----
-
-## What We're NOT Looking For
-
-- **A perfect UI** — functional correctness matters more than polish
-- **An over-engineered framework** — a clean, well-thought-out script is better than a sprawling abstraction layer
-- **Memorization** — if your agent only works because the spec is hardcoded into the prompts, that's a red flag. We'll test with a modified spec
-- **Databases, backends, or infrastructure** — the boilerplate uses MSW to mock the API. There is no real backend. Do not build one. No databases, no Docker, no server setup
-- **Authentication, deployment, or CI/CD** — keep scope focused on the agent and the generated app
-
----
-
-## Getting Started
-
-```bash
-# 1. Clone this repo (contains the boilerplate)
-git clone <repo-url> && cd Fullstack-Coding-Challenge
-
-# 2. Verify the boilerplate works
-npm install
-npm run dev        # Should run at localhost:5173
-npm run test       # Should pass (2 tests)
-npm run typecheck  # Should pass
-
-# 3. Build your agent (in a separate directory or repo)
-# Your agent should copy this boilerplate, then generate code into it
-
-# 4. Run your agent
-node agent.js --spec ./spec.txt --output ./generated-app
-
-# 5. Verify the output
-cd generated-app
-npm install
-npm run dev
 ```
-
----
-
-## Questions?
-
-If anything is ambiguous, make a reasonable assumption and document it in your README. We value clear thinking over asking for clarification on every detail.
+BIMM/
+├── README.md              ← you are here
+├── .env.example           ← API key template
+├── package.json           ← boilerplate (React + Vite)
+├── src/                   ← boilerplate source
+├── agent/                 ← the agentic CLI tool
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── spec.txt           ← feature specification
+│   ├── .env               ← your API key (gitignored)
+│   ├── .env.example
+│   └── src/
+│       ├── index.ts       ← CLI entrypoint (orchestrator)
+│       ├── planner.ts     ← spec → task list
+│       ├── generator.ts   ← task list → generated code
+│       ├── validator.ts   ← tsc + vitest runner
+│       ├── fixer.ts       ← error → fixed code
+│       ├── logger.ts      ← chalk-based logging
+│       └── types.ts       ← shared TypeScript types
+└── generated-app/         ← output (gitignored)
+```

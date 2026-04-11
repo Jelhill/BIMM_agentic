@@ -13,7 +13,22 @@ Each task object must have exactly these fields:
 - "dependsOn": an array of task ids that must be completed before this task (empty array if none)
 - "outputFile": the relative file path this task will create or modify (e.g. "src/hooks/useCars.ts")
 
-Order tasks so dependencies come first. Be specific about file paths and implementation details.`;
+Order tasks so dependencies come first. Be specific about file paths and implementation details.
+
+IMPORTANT CONSTRAINTS for outputFile paths:
+- Files containing JSX (components, test files that render components) MUST use .tsx extension.
+- Pure TypeScript files (types, hooks with no JSX, utilities) use .ts extension.
+- Test files that use <Component /> or render() MUST be .tsx, not .ts.
+- Use the "@/" import alias for src/ imports in descriptions.
+- The boilerplate already provides: src/main.tsx, src/test-setup.ts, src/mocks/browser.ts, src/mocks/server.ts, src/mocks/handlers.ts, src/mocks/data.ts, src/graphql/queries.ts, src/types.ts, src/App.tsx, vitest.config.ts, tsconfig.json.
+- Do NOT create tasks for files that the boilerplate already provides UNLESS the spec requires modifying them.
+- Always include tasks to modify these boilerplate files to match the spec: src/types.ts, src/graphql/queries.ts, src/mocks/handlers.ts, src/mocks/data.ts, src/App.tsx.
+
+TECHNOLOGY STACK (include in task descriptions):
+- Vitest for testing (vi.mock, vi.fn — NOT jest)
+- MUI v6 Grid2 with size prop — NOT Grid with xs/md props
+- MSW v2 (HttpResponse.json, graphql.query/mutation)
+- Apollo Client with MockedProvider for test mocking`;
 
 export async function planTasks(spec: string): Promise<Task[]> {
   const client = new Anthropic();

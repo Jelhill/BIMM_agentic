@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
+    "generate": "tsc && node dist/index.js --spec ./spec.txt",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

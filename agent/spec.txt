@@ -1,51 +1,53 @@
-Car Inventory Manager — Feature Spec
+Movie Watchlist Manager — Feature Spec
 
-A React + TypeScript single-page application for browsing and managing a car inventory. Built with Vite, MUI, Apollo Client, and MSW for mock GraphQL.
+A React + TypeScript single-page application for browsing and managing a personal movie watchlist. Built with Vite, MUI, Apollo Client, and MSW for mock GraphQL.
 
 ## Data Model
 
-Each car has: id, make, model, year, color, and image (URL string).
+Each movie has: id, title, genre, year, rating (number 1-10), watched (boolean), and poster (URL string).
 
 ## Features
 
-### 1. Cars List (GraphQL + MSW Mock API)
-- Use Apollo Client to fetch cars via a `GET_CARS` GraphQL query.
-- Mock the GraphQL API using MSW (Mock Service Worker) with a handler that returns a static list of sample cars.
-- Display the list of cars as MUI Cards in a responsive grid layout.
+### 1. Movies List (GraphQL + MSW Mock API)
+- Use Apollo Client to fetch movies via a `GET_MOVIES` GraphQL query.
+- Mock the GraphQL API using MSW with a handler that returns a static list of at least 5 sample movies.
+- Display the list of movies as MUI Cards in a responsive grid layout.
 
 ### 2. Responsive Images
-- Each car card displays an image that adapts to viewport width:
+- Each movie card displays a poster image that adapts to viewport width:
   - Mobile (≤640px): images render at full width of card
   - Tablet (641–1023px): images render at medium size within a 2-column grid
   - Desktop (≥1024px): images render at fixed size within a 3- or 4-column grid
 - Use MUI's `useMediaQuery` or responsive Grid props for breakpoints.
 
-### 3. MUI Car Cards
-- Each card shows: make, model, year, color, and image.
+### 3. MUI Movie Cards
+- Each card shows: title, genre, year, rating, watched status, and poster.
 - Use MUI `Card`, `CardMedia`, `CardContent`, and `Typography` components.
-- Apply consistent styling with a color indicator (small swatch or chip) for the car's color.
+- Show a MUI `Chip` indicating whether the movie is watched or unwatched.
+- Show the rating as a numeric badge or MUI `Rating` component.
 
-### 4. Add Car Form (GraphQL Mutation)
-- A form (dialog or inline) to add a new car with fields: make, model, year, color, image URL.
-- Submits via an `ADD_CAR` GraphQL mutation.
-- Mock the mutation in MSW to append the new car to the in-memory list.
-- On success, the cars list updates to include the new car.
+### 4. Add Movie Form (GraphQL Mutation)
+- A form (dialog or inline) to add a new movie with fields: title, genre, year, rating, watched, poster URL.
+- Submits via an `ADD_MOVIE` GraphQL mutation.
+- Mock the mutation in MSW to append the new movie to the in-memory list.
+- On success, the movies list updates to include the new movie.
 
 ### 5. Search and Sort
-- A search input that filters the displayed cars by model (case-insensitive substring match).
-- Sort controls to sort by year (ascending/descending) or make (alphabetical).
+- A search input that filters the displayed movies by title (case-insensitive substring match).
+- Sort controls to sort by year (ascending/descending) or rating (high to low).
+- A toggle to filter by watched vs unwatched vs all.
 - Filtering and sorting operate on the client side over the fetched data.
 
-### 6. useCars() Custom Hook
-- Encapsulate all GraphQL logic (query, mutation, cache update) in a `useCars()` custom hook.
-- The hook returns: `{ cars, loading, error, addCar, refetch }`.
+### 6. useMovies() Custom Hook
+- Encapsulate all GraphQL logic (query, mutation, cache update) in a `useMovies()` custom hook.
+- The hook returns: `{ movies, loading, error, addMovie, refetch }`.
 - Components consume this hook instead of calling Apollo directly.
 
 ### 7. Unit Tests
-- Test the cars list rendering with mocked Apollo provider.
-- Test the Add Car form submission and list update.
+- Test the movies list rendering with mocked Apollo provider.
+- Test the Add Movie form submission and list update.
 - Test search filtering and sort behavior.
-- Test the useCars() hook using renderHook with a mocked provider.
+- Test the useMovies() hook using renderHook with a mocked provider.
 - Use Vitest + React Testing Library.
 
 ## Tech Stack
