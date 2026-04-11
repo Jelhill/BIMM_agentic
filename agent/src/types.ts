@@ -13,6 +13,7 @@ export interface AgentConfig {
 }
 
 export interface ValidationResult {
-  valid: boolean;
+  passed: boolean;
   errors: string[];
+  rawOutput: string;
 }

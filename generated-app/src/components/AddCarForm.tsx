@@ -10,44 +10,28 @@ import {
   Alert,
 } from '@mui/material';
 import { useCars } from '../hooks/useCars';
-import { AddCarInput } from '../types/car';
+import { CreateCarInput } from '../types/car';
 
 interface AddCarFormProps {
   open: boolean;
   onClose: () => void;
 }
 
-interface FormData {
-  make: string;
-  model: string;
-  year: string;
-  color: string;
-  imageUrl: string;
-}
-
-interface FormErrors {
-  make?: string;
-  model?: string;
-  year?: string;
-  color?: string;
-  imageUrl?: string;
-}
-
-const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
+export const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
   const { addCar } = useCars();
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<CreateCarInput>({
     make: '',
     model: '',
-    year: '',
+    year: new Date().getFullYear(),
     color: '',
     imageUrl: '',
   });
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [errors, setErrors] = useState<Partial<CreateCarInput>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+    const newErrors: Partial<CreateCarInput> = {};
 
     if (!formData.make.trim()) {
       newErrors.make = 'Make is required';
@@ -57,14 +41,8 @@ const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
       newErrors.model = 'Model is required';
     }
 
-    if (!formData.year.trim()) {
-      newErrors.year = 'Year is required';
-    } else {
-      const yearNum = parseInt(formData.year);
-      const currentYear = new Date().getFullYear();
-      if (isNaN(yearNum) || yearNum < 1886 || yearNum > currentYear + 1) {
-        newErrors.year = 'Please enter a valid year';
-      }
+    if (!formData.year || formData.year < 1900 || formData.year > new Date().getFullYear() + 1) {
+      newErrors.year = 'Please enter a valid year';
     }
 
     if (!formData.color.trim()) {
@@ -79,41 +57,31 @@ const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const isValidUrl = (string: string): boolean => {
+  const isValidUrl = (url: string): boolean => {
     try {
-      new URL(string);
+      new URL(url);
       return true;
     } catch {
       return false;
     }
   };
 
-  const handleInputChange = (field: keyof FormData) => (
+  const handleInputChange = (field: keyof CreateCarInput) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
+    const value = field === 'year' ? parseInt(event.target.value, 10) || 0 : event.target.value;
     setFormData(prev => ({
       ...prev,
-      [field]: event.target.value,
+      [field]: value,
     }));
 
+    // Clear error for this field
     if (errors[field]) {
       setErrors(prev => ({
         ...prev,
         [field]: undefined,
       }));
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      make: '',
-      model: '',
-      year: '',
-      color: '',
-      imageUrl: '',
-    });
-    setErrors({});
-    setSubmitError(null);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -127,26 +95,25 @@ const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
     setSubmitError(null);
 
     try {
-      const carInput: AddCarInput = {
-        make: formData.make.trim(),
-        model: formData.model.trim(),
-        year: parseInt(formData.year),
-        color: formData.color.trim(),
-        imageUrl: formData.imageUrl.trim() || undefined,
-      };
-
-      await addCar(carInput);
-      resetForm();
-      onClose();
+      await addCar(formData);
+      handleClose();
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'An error occurred while adding the car');
+      setSubmitError('Failed to add car. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    resetForm();
+    setFormData({
+      make: '',
+      model: '',
+      year: new Date().getFullYear(),
+      color: '',
+      imageUrl: '',
+    });
+    setErrors({});
+    setSubmitError(null);
     onClose();
   };
 
@@ -155,30 +122,31 @@ const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
       <DialogTitle>Add New Car</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
-          {submitError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {submitError}
-            </Alert>
-          )}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {submitError && (
+              <Alert severity="error">{submitError}</Alert>
+            )}
+            
             <TextField
               label="Make"
               value={formData.make}
               onChange={handleInputChange('make')}
               error={!!errors.make}
               helperText={errors.make}
-              fullWidth
               required
+              fullWidth
             />
+
             <TextField
               label="Model"
               value={formData.model}
               onChange={handleInputChange('model')}
               error={!!errors.model}
               helperText={errors.model}
-              fullWidth
               required
+              fullWidth
             />
+
             <TextField
               label="Year"
               type="number"
@@ -186,26 +154,32 @@ const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
               onChange={handleInputChange('year')}
               error={!!errors.year}
               helperText={errors.year}
-              fullWidth
               required
-              inputProps={{ min: 1886, max: new Date().getFullYear() + 1 }}
+              fullWidth
+              inputProps={{
+                min: 1900,
+                max: new Date().getFullYear() + 1,
+              }}
             />
+
             <TextField
               label="Color"
               value={formData.color}
               onChange={handleInputChange('color')}
               error={!!errors.color}
               helperText={errors.color}
-              fullWidth
               required
+              fullWidth
             />
+
             <TextField
               label="Image URL"
               value={formData.imageUrl}
               onChange={handleInputChange('imageUrl')}
               error={!!errors.imageUrl}
-              helperText={errors.imageUrl || 'Optional: Add a URL for the car image'}
+              helperText={errors.imageUrl}
               fullWidth
+              placeholder="https://example.com/image.jpg"
             />
           </Box>
         </DialogContent>
@@ -225,5 +199,3 @@ const AddCarForm: React.FC<AddCarFormProps> = ({ open, onClose }) => {
     </Dialog>
   );
 };
-
-export default AddCarForm;

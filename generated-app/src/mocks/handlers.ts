@@ -1,118 +1,121 @@
-import { graphql } from 'msw';
+import { graphql, HttpResponse } from 'msw';
+import { Car, CreateCarInput } from '../types/car';
 
-interface Car {
-  id: string;
-  make: string;
-  model: string;
-  year: number;
-  color: string;
-  image: string;
-}
-
-let cars: Car[] = [
+let mockCars: Car[] = [
   {
     id: '1',
     make: 'Toyota',
     model: 'Camry',
-    year: 2023,
-    color: 'Silver',
-    image: 'https://via.placeholder.com/400x300/silver/000000?text=Toyota+Camry'
+    year: 2022,
+    color: 'Blue',
+    image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=400&h=300&fit=crop'
   },
   {
     id: '2',
     make: 'Honda',
     model: 'Civic',
-    year: 2022,
-    color: 'Blue',
-    image: 'https://via.placeholder.com/400x300/blue/ffffff?text=Honda+Civic'
+    year: 2021,
+    color: 'Red',
+    image: 'https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=400&h=300&fit=crop'
   },
   {
     id: '3',
     make: 'Ford',
     model: 'Mustang',
-    year: 2024,
-    color: 'Red',
-    image: 'https://via.placeholder.com/400x300/red/ffffff?text=Ford+Mustang'
+    year: 2023,
+    color: 'Black',
+    image: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=400&h=300&fit=crop'
   },
   {
     id: '4',
-    make: 'BMW',
-    model: '3 Series',
-    year: 2023,
-    color: 'Black',
-    image: 'https://via.placeholder.com/400x300/000000/ffffff?text=BMW+3+Series'
-  },
-  {
-    id: '5',
-    make: 'Mercedes-Benz',
-    model: 'C-Class',
-    year: 2022,
-    color: 'White',
-    image: 'https://via.placeholder.com/400x300/ffffff/000000?text=Mercedes+C-Class'
-  },
-  {
-    id: '6',
-    make: 'Audi',
-    model: 'A4',
-    year: 2023,
-    color: 'Gray',
-    image: 'https://via.placeholder.com/400x300/gray/ffffff?text=Audi+A4'
-  },
-  {
-    id: '7',
     make: 'Tesla',
     model: 'Model 3',
-    year: 2024,
-    color: 'Pearl White',
-    image: 'https://via.placeholder.com/400x300/f5f5f5/000000?text=Tesla+Model+3'
-  },
-  {
-    id: '8',
-    make: 'Chevrolet',
-    model: 'Corvette',
     year: 2023,
-    color: 'Yellow',
-    image: 'https://via.placeholder.com/400x300/yellow/000000?text=Chevrolet+Corvette'
+    color: 'White',
+    image: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=400&h=300&fit=crop'
   }
 ];
 
 export const handlers = [
-  graphql.query('GetCars', () => {
-    return new Response(
-      JSON.stringify({
-        data: {
-          cars
-        }
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
+  graphql.query('GetCars', ({ variables }) => {
+    const { limit = 10, offset = 0 } = variables as any;
+    const paginatedCars = mockCars.slice(offset, offset + limit);
+    
+    return HttpResponse.json({
+      data: {
+        cars: paginatedCars
       }
-    );
+    });
+  }),
+
+  graphql.query('GetCar', ({ variables }) => {
+    const { id } = variables as any;
+    const car = mockCars.find(car => car.id === id);
+    
+    if (!car) {
+      return HttpResponse.json({
+        errors: [{ message: 'Car not found' }]
+      });
+    }
+
+    return HttpResponse.json({
+      data: {
+        car
+      }
+    });
   }),
 
   graphql.mutation('AddCar', ({ variables }) => {
-    const { input } = variables as { input: Omit<Car, 'id'> };
-    
+    const { input } = variables as any;
     const newCar: Car = {
-      id: (cars.length + 1).toString(),
+      id: (mockCars.length + 1).toString(),
       ...input
     };
     
-    cars.push(newCar);
+    mockCars.push(newCar);
     
-    return new Response(
-      JSON.stringify({
-        data: {
-          addCar: newCar
-        }
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
+    return HttpResponse.json({
+      data: {
+        addCar: newCar
       }
-    );
+    });
+  }),
+
+  graphql.mutation('UpdateCar', ({ variables }) => {
+    const { input } = variables as any;
+    const carIndex = mockCars.findIndex(car => car.id === input.id);
+    
+    if (carIndex === -1) {
+      return HttpResponse.json({
+        errors: [{ message: 'Car not found' }]
+      });
+    }
+    
+    mockCars[carIndex] = { ...mockCars[carIndex], ...input };
+    
+    return HttpResponse.json({
+      data: {
+        updateCar: mockCars[carIndex]
+      }
+    });
+  }),
+
+  graphql.mutation('DeleteCar', ({ variables }) => {
+    const { id } = variables as any;
+    const carIndex = mockCars.findIndex(car => car.id === id);
+    
+    if (carIndex === -1) {
+      return HttpResponse.json({
+        errors: [{ message: 'Car not found' }]
+      });
+    }
+    
+    mockCars.splice(carIndex, 1);
+    
+    return HttpResponse.json({
+      data: {
+        deleteCar: true
+      }
+    });
   })
 ];

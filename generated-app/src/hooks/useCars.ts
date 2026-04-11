@@ -1,51 +1,50 @@
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_CARS, ADD_CAR } from '../graphql/queries';
-import { Car, AddCarInput } from '../types/car';
+import { GET_CARS, ADD_CAR } from '../apollo/queries';
+import { Car, CreateCarInput } from '../types/car';
 
-interface UseCarsReturn {
+interface UseCarsResult {
   cars: Car[];
   loading: boolean;
-  error: string | null;
-  addCar: (car: AddCarInput) => Promise<void>;
+  error: any;
+  addCar: (input: CreateCarInput) => Promise<void>;
   refetch: () => void;
 }
 
-export const useCars = (): UseCarsReturn => {
+export const useCars = (): UseCarsResult => {
   const { data, loading, error, refetch } = useQuery(GET_CARS, {
-    errorPolicy: 'all',
+    variables: { limit: 100, offset: 0 },
+    fetchPolicy: 'cache-and-network',
   });
 
   const [addCarMutation] = useMutation(ADD_CAR, {
-    update: (cache, { data: mutationData }) => {
-      if (mutationData?.addCar) {
+    update(cache, { data: mutationResult }) {
+      if (mutationResult?.createCar) {
         const existingCars = cache.readQuery({ query: GET_CARS });
-        if (existingCars) {
-          cache.writeQuery({
-            query: GET_CARS,
-            data: {
-              cars: [...existingCars.cars, mutationData.addCar],
-            },
-          });
-        }
+        cache.writeQuery({
+          query: GET_CARS,
+          data: {
+            cars: [...(existingCars?.cars || []), mutationResult.createCar],
+          },
+        });
       }
     },
-    errorPolicy: 'all',
   });
 
-  const addCar = async (car: AddCarInput): Promise<void> => {
+  const addCar = async (input: CreateCarInput): Promise<void> => {
     try {
       await addCarMutation({
-        variables: { input: car },
+        variables: { input },
       });
-    } catch (err) {
-      throw err;
+    } catch (error) {
+      console.error('Error adding car:', error);
+      throw error;
     }
   };
 
   return {
     cars: data?.cars || [],
     loading,
-    error: error?.message || null,
+    error,
     addCar,
     refetch,
   };
