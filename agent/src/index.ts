@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command } from "commander";
 import dotenv from "dotenv";
+import { generateCode } from "./generator.js";
 import { logger } from "./logger.js";
 import { planTasks } from "./planner.js";
 
@@ -40,6 +41,12 @@ program
       console.log(`        File: ${task.outputFile}`);
       console.log(`        ${task.description}\n`);
     }
+
+    // Phase 3: Code generation
+    // Agent runs from /agent, boilerplate is parent dir (BIMM root)
+    const boilerplatePath = resolve(process.cwd(), "..");
+    const outputPath = resolve(process.cwd(), "../generated-app");
+    await generateCode(tasks, boilerplatePath, outputPath);
   });
 
 program.parse();
