@@ -119,13 +119,13 @@ export async function planTasks(spec: string): Promise<Task[]> {
   try {
     parsed = JSON.parse(rawText);
   } catch {
-    logger.error("Failed to parse Claude response as JSON:");
+    logger.error("Failed to parse LLM response as JSON:");
     logger.error(rawText);
-    throw new Error("Claude did not return valid JSON");
+    throw new Error("LLM did not return valid JSON");
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error("Claude response is not an array");
+    throw new Error("LLM response is not an array");
   }
 
   const tasks: Task[] = parsed.map((item: Record<string, unknown>) => ({

@@ -18,7 +18,6 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
   const files = new Set<string>();
 
   for (const error of errors) {
-    // Match TypeScript error format: path(line,col): error TS...
     const tsMatch = error.match(/^(.+?)\(\d+,\d+\):\s*error\s+TS/);
     if (tsMatch) {
       const filePath = join(projectPath, tsMatch[1]);
@@ -28,7 +27,6 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
       continue;
     }
 
-    // Match vitest FAIL lines: " FAIL  src/components/Foo.test.tsx"
     const failMatch = error.match(/FAIL\s+(src\/\S+\.(?:ts|tsx))/);
     if (failMatch) {
       const filePath = join(projectPath, failMatch[1]);
@@ -38,7 +36,6 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
       continue;
     }
 
-    // Match "❯" vitest error location: " ❯ src/hooks/useMovies.test.tsx:15:5"
     const vitestLocMatch = error.match(/❯\s+(src\/\S+\.(?:ts|tsx))(?::\d+)?/);
     if (vitestLocMatch) {
       const filePath = join(projectPath, vitestLocMatch[1]);
@@ -48,7 +45,6 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
       continue;
     }
 
-    // Match common path patterns in error output (src/..., ./, etc.)
     const pathMatch = error.match(/(?:^|\s)(src\/\S+\.(?:ts|tsx|js|jsx))/);
     if (pathMatch) {
       const filePath = join(projectPath, pathMatch[1]);
@@ -65,7 +61,6 @@ function extractFailingFiles(errors: string[], projectPath: string): string[] {
  * Get errors relevant to a specific file.
  */
 function getErrorsForFile(filePath: string, allErrors: string[]): string[] {
-  // Extract the filename and relative path from src/
   const srcIdx = filePath.indexOf("src/");
   const relativePath = srcIdx >= 0 ? filePath.slice(srcIdx) : filePath;
   const fileName = filePath.split("/").pop() ?? "";
@@ -90,7 +85,6 @@ function fixTsFilesWithJsx(projectPath: string): void {
         scanDir(fullPath);
       } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) {
         const content = readFileSync(fullPath, "utf-8");
-        // Check for JSX patterns: <Component, </Component>, <>, </>
         if (/<[A-Z][a-zA-Z]*[\s/>]/.test(content) || /<\/>/.test(content) || /render\(/.test(content) && /</.test(content)) {
           const newPath = fullPath.replace(/\.ts$/, ".tsx");
           renameSync(fullPath, newPath);
@@ -121,7 +115,6 @@ program
       process.exit(1);
     }
 
-    // Phase 2: Planning
     const tasks = await planTasks(specContent);
 
     console.log("\n" + "=".repeat(60));
@@ -138,20 +131,16 @@ program
       console.log(`        ${task.description}\n`);
     }
 
-    // Phase 3: Code generation
     const boilerplatePath = resolve(process.cwd(), "..");
     const outputPath = resolve(process.cwd(), "../generated-app");
     await generateCode(tasks, boilerplatePath, outputPath);
 
-    // Post-generation: fix .ts files containing JSX
     fixTsFilesWithJsx(outputPath);
 
-    // Phase 4: Validation + retry
     console.log("\n" + "=".repeat(60));
     logger.info("Validation — Pass 1");
     console.log("=".repeat(60) + "\n");
 
-    // Install deps in generated app first
     logger.info("Installing dependencies in generated app...");
     const { execSync } = await import("node:child_process");
     try {
@@ -176,7 +165,6 @@ program
       return;
     }
 
-    // Multi-pass fix loop: attempt up to MAX_FIX_PASSES fix iterations
     for (let pass = 1; pass <= MAX_FIX_PASSES; pass++) {
       console.log("\n" + "=".repeat(60));
       logger.info(`Fix pass ${pass}/${MAX_FIX_PASSES}...`);
@@ -205,16 +193,13 @@ program
         const fileContent = readFileSync(filePath, "utf-8");
         const fileErrors = getErrorsForFile(filePath, result.errors);
 
-        // If no specific errors matched, pass all errors as context
         const errorsToSend = fileErrors.length > 0 ? fileErrors : result.errors;
         const fixed = await fixFile(filePath, fileContent, errorsToSend, outputPath);
         writeFileSync(filePath, fixed, "utf-8");
       }
 
-      // Post-fix: re-check for .ts files with JSX
       fixTsFilesWithJsx(outputPath);
 
-      // Re-validate
       console.log("\n" + "=".repeat(60));
       logger.info(`Validation — Pass ${pass + 1} (after fix pass ${pass})`);
       console.log("=".repeat(60) + "\n");
@@ -226,7 +211,6 @@ program
       }
     }
 
-    // Final result
     console.log("\n" + "=".repeat(60));
     if (result.passed) {
       logger.success("All checks passed after fixes!");

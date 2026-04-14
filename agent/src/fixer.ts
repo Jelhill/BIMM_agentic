@@ -32,19 +32,16 @@ function gatherRelatedFileContext(
   projectPath: string
 ): string {
   const contextParts: string[] = [];
-  // Match @/ alias imports and relative imports
   const importRegex = /from\s+["'](@\/[^"']+|\.\.?\/[^"']+)["']/g;
   const seen = new Set<string>();
 
   for (const match of fileContent.matchAll(importRegex)) {
     let importPath = match[1];
 
-    // Resolve @/ alias to src/
     if (importPath.startsWith("@/")) {
       importPath = "src/" + importPath.slice(2);
     }
 
-    // Try common extensions
     const extensions = ["", ".ts", ".tsx", ".js", ".jsx"];
     for (const ext of extensions) {
       const candidate = join(projectPath, importPath + ext);
@@ -76,7 +73,6 @@ export async function fixFile(
 ): Promise<string> {
   logger.info(`Fixing: ${filePath}`);
 
-  // Gather context from files that the broken file imports
   let relatedContext = "";
   if (projectPath) {
     relatedContext = gatherRelatedFileContext(filePath, fileContent, projectPath);
@@ -98,7 +94,6 @@ ${fileContent}`;
 
   const response = await callLLM(userPrompt);
 
-  // Strip markdown fences if accidentally added
   let code = response;
   if (code.startsWith("```")) {
     const lines = code.split("\n");

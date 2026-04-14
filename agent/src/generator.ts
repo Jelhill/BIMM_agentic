@@ -51,11 +51,10 @@ function buildFileManifest(outputPath: string): string {
       if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== "__tests__") {
         scan(fullPath);
       } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".d.ts")) {
-        const relativePath = fullPath.slice(outputPath.length + 1); // e.g. "src/types.ts"
-        const aliasPath = "@/" + relativePath.slice(4).replace(/\.(ts|tsx)$/, ""); // e.g. "@/types"
+        const relativePath = fullPath.slice(outputPath.length + 1);
+        const aliasPath = "@/" + relativePath.slice(4).replace(/\.(ts|tsx)$/, "");
         const content = readFileSync(fullPath, "utf-8");
 
-        // Extract export names
         const exports: string[] = [];
         for (const match of content.matchAll(/export\s+(?:const|function|class|interface|type|enum)\s+(\w+)/g)) {
           exports.push(match[1]);
@@ -158,7 +157,6 @@ export async function generateCode(
   boilerplatePath: string,
   outputPath: string
 ): Promise<void> {
-  // Copy boilerplate into outputPath (entry-by-entry to avoid self-copy error)
   if (existsSync(outputPath)) {
     logger.info("Output directory already exists, overwriting...");
   }
@@ -173,7 +171,6 @@ export async function generateCode(
   }
   logger.success(`Copied boilerplate to ${outputPath}`);
 
-  // Remove boilerplate example files that conflict with generated code
   const boilerplateExamples = [
     join(outputPath, "src/components/Example.tsx"),
     join(outputPath, "src/__tests__/Example.test.tsx"),
@@ -184,13 +181,11 @@ export async function generateCode(
       logger.info(`Removed boilerplate file: ${exFile}`);
     }
   }
-  // Remove empty __tests__ dir if it's now empty
   const testsDir = join(outputPath, "src/__tests__");
   if (existsSync(testsDir) && readdirSync(testsDir).length === 0) {
     rmSync(testsDir, { recursive: true });
   }
 
-  // Sort tasks by dependency order
   const sorted = topologicalSort(tasks);
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
 
@@ -203,10 +198,7 @@ export async function generateCode(
     logger.info(`${progress} Generating: ${task.title}`);
     logger.info(`        -> ${task.outputFile}`);
 
-    // Gather context from dependency files
     const context = gatherDependencyContext(task, taskMap, outputPath);
-
-    // Build manifest of all existing files so the LLM knows correct import paths
     const manifest = buildFileManifest(outputPath);
 
     let userPrompt = `Generate the file: ${task.outputFile}\n\n`;
@@ -224,18 +216,16 @@ export async function generateCode(
     const fullPrompt = `${GENERATOR_SYSTEM_PROMPT}\n\n${userPrompt}`;
     const response = await callLLM(fullPrompt);
 
-    // Strip markdown fences if LLM accidentally adds them
     let code = response;
     if (code.startsWith("```")) {
       const lines = code.split("\n");
-      lines.shift(); // remove opening fence
+      lines.shift();
       if (lines[lines.length - 1]?.trim() === "```") {
-        lines.pop(); // remove closing fence
+        lines.pop();
       }
       code = lines.join("\n");
     }
 
-    // Write the file
     const outFile = join(outputPath, task.outputFile);
     mkdirSync(dirname(outFile), { recursive: true });
     writeFileSync(outFile, code, "utf-8");
