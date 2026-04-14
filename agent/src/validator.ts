@@ -47,7 +47,7 @@ export async function validate(projectPath: string): Promise<ValidationResult> {
 
   // 2. Tests (use npx vitest run to ensure single-run, no watch mode)
   logger.info("Running vitest run...");
-  const test = runCommand("npx vitest run --reporter=verbose", projectPath);
+  const test = runCommand("npm run test -- --reporter=verbose", projectPath);
   outputParts.push("=== npm run test ===", test.stdout, test.stderr);
 
   if (test.exitCode !== 0) {

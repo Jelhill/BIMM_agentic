@@ -35,6 +35,48 @@ TECHNOLOGY STACK (you MUST follow these):
 - For test files: import { describe, it, expect, vi, beforeEach } from "vitest".
 - Test setup file is at "src/test-setup.ts" which sets up @testing-library/jest-dom/vitest matchers and MSW server.`;
 
+/**
+ * Build a manifest of all previously generated src/ files with their export signatures.
+ * This gives the LLM accurate import paths so it doesn't have to guess.
+ */
+function buildFileManifest(outputPath: string): string {
+  const srcDir = join(outputPath, "src");
+  if (!existsSync(srcDir)) return "";
+
+  const entries: string[] = [];
+
+  function scan(dir: string): void {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== "__tests__") {
+        scan(fullPath);
+      } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".d.ts")) {
+        const relativePath = fullPath.slice(outputPath.length + 1); // e.g. "src/types.ts"
+        const aliasPath = "@/" + relativePath.slice(4).replace(/\.(ts|tsx)$/, ""); // e.g. "@/types"
+        const content = readFileSync(fullPath, "utf-8");
+
+        // Extract export names
+        const exports: string[] = [];
+        for (const match of content.matchAll(/export\s+(?:const|function|class|interface|type|enum)\s+(\w+)/g)) {
+          exports.push(match[1]);
+        }
+        if (content.includes("export default")) {
+          exports.push("default");
+        }
+
+        if (exports.length > 0) {
+          entries.push(`  ${aliasPath} — exports: ${exports.join(", ")}`);
+        }
+      }
+    }
+  }
+
+  scan(srcDir);
+  return entries.length > 0
+    ? "Available project files (use these EXACT import paths):\n" + entries.join("\n")
+    : "";
+}
+
 function topologicalSort(tasks: Task[]): Task[] {
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
   const visited = new Set<string>();
@@ -64,14 +106,37 @@ function truncateContent(content: string): string {
   return lines.slice(0, MAX_CONTEXT_LINES).join("\n") + "\n// ...truncated";
 }
 
+/**
+ * Collect all transitive dependency IDs for a task (breadth-first).
+ */
+function getTransitiveDeps(task: Task, taskMap: Map<string, Task>): string[] {
+  const visited = new Set<string>();
+  const queue = [...task.dependsOn];
+
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const dep = taskMap.get(id);
+    if (dep) {
+      for (const parentId of dep.dependsOn) {
+        queue.push(parentId);
+      }
+    }
+  }
+
+  return [...visited];
+}
+
 function gatherDependencyContext(
   task: Task,
   taskMap: Map<string, Task>,
   outputPath: string
 ): string {
   const contextParts: string[] = [];
+  const allDepIds = getTransitiveDeps(task, taskMap);
 
-  for (const depId of task.dependsOn) {
+  for (const depId of allDepIds) {
     const depTask = taskMap.get(depId);
     if (!depTask) continue;
 
@@ -143,9 +208,16 @@ export async function generateCode(
     // Gather context from dependency files
     const context = gatherDependencyContext(task, taskMap, outputPath);
 
+    // Build manifest of all existing files so the LLM knows correct import paths
+    const manifest = buildFileManifest(outputPath);
+
     let userPrompt = `Generate the file: ${task.outputFile}\n\n`;
     userPrompt += `Task: ${task.title}\n`;
     userPrompt += `Description: ${task.description}\n`;
+
+    if (manifest) {
+      userPrompt += `\n${manifest}\n\nIMPORTANT: Use the EXACT import paths listed above. Do NOT invent or guess import paths.\n`;
+    }
 
     if (context) {
       userPrompt += `\nHere are the dependency files you should reference:\n\n${context}`;
