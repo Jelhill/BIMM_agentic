@@ -1,30 +1,40 @@
 import { graphql, HttpResponse } from 'msw';
-import { mockBooks } from '@/mocks/data';
-import { Book, BookInput } from '@/types';
-
-let books: Book[] = [...mockBooks];
+import { mockCars } from '@/mocks/data';
+import { CarInput } from '@/types';
 
 export const handlers = [
-  graphql.query('GetBooks', () => {
+  graphql.query('GetCars', () => {
     return HttpResponse.json({
       data: {
-        books,
-      },
+        cars: mockCars
+      }
     });
   }),
 
-  graphql.mutation('AddBook', ({ variables }) => {
-    const { input } = variables as { input: BookInput };
-    const newBook: Book = {
-      id: String(books.length + 1),
-      ...input,
-    };
-    books.push(newBook);
+  graphql.query('GetCar', ({ variables }) => {
+    const { id } = variables as { id: string };
+    const car = mockCars.find(car => car.id === id);
     
     return HttpResponse.json({
       data: {
-        addBook: newBook,
-      },
+        car: car || null
+      }
     });
   }),
+
+  graphql.mutation('AddCar', ({ variables }) => {
+    const { input } = variables as { input: CarInput };
+    const newCar = {
+      id: String(mockCars.length + 1),
+      ...input
+    };
+    
+    mockCars.push(newCar);
+    
+    return HttpResponse.json({
+      data: {
+        addCar: newCar
+      }
+    });
+  })
 ];

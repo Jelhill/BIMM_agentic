@@ -1,6 +1,6 @@
 # BIMM — Agentic Code Generation CLI
 
-An AI-powered CLI agent that reads a plain-text feature specification and autonomously generates a complete, working React + TypeScript application. The agent decomposes the spec into an ordered task plan, generates code for each task using Claude, validates the output with TypeScript and test runners, and auto-fixes errors in a retry loop. Built as a 5-phase project demonstrating agentic LLM architecture.
+An AI-powered CLI agent that reads a plain-text feature specification and autonomously generates a complete, working React + TypeScript application. The agent decomposes the spec into an ordered task plan, generates code for each task using a configurable LLM provider (Anthropic Claude or OpenAI GPT-4o), validates the output with TypeScript and test runners, and auto-fixes errors in a multi-pass retry loop (up to 3 attempts). Built as a 5-phase project demonstrating agentic LLM architecture.
 
 ## Agent Architecture
 
@@ -14,10 +14,10 @@ spec.txt
 │ Planner  │────▶│ Generator │────▶│ Validator │────▶│ Fixer │
 │          │     │           │     │           │     │       │
 │ Calls    │     │ Iterates  │     │ Runs tsc  │     │ Sends │
-│ Claude   │     │ tasks in  │     │ + vitest  │     │ file  │
-│ to make  │     │ dep order,│     │ in the    │     │ + err │
+│ LLM to   │     │ tasks in  │     │ + vitest  │     │ file  │
+│ make     │     │ dep order,│     │ in the    │     │ + err │
 │ task     │     │ passes    │     │ generated │     │ to    │
-│ list     │     │ dep file  │     │ app dir   │     │Claude │
+│ list     │     │ dep file  │     │ app dir   │     │ LLM  │
 │          │     │ context   │     │           │     │       │
 └──────────┘     └───────────┘     └─────┬─────┘     └───┬───┘
                                          │               │
@@ -38,10 +38,11 @@ spec.txt
 
 | Module | File | Responsibility |
 |--------|------|----------------|
-| **Planner** | `agent/src/planner.ts` | Sends the spec to Claude and instructs it to return a JSON array of tasks, each with `id`, `title`, `description`, `dependsOn[]`, and `outputFile`. |
-| **Generator** | `agent/src/generator.ts` | Copies the boilerplate into `/generated-app`, topologically sorts tasks by dependencies, then generates each file by calling Claude with the task description and the contents of dependency files as context. |
+| **LLM** | `agent/src/llm.ts` | Unified LLM calling layer. Reads `LLM_PROVIDER` from env to dispatch to Anthropic (`claude-sonnet-4-20250514`) or OpenAI (`gpt-4o`). Extensible — add new providers by handling additional cases. |
+| **Planner** | `agent/src/planner.ts` | Sends the spec to the LLM and instructs it to return a JSON array of tasks, each with `id`, `title`, `description`, `dependsOn[]`, and `outputFile`. |
+| **Generator** | `agent/src/generator.ts` | Copies the boilerplate into `/generated-app`, topologically sorts tasks by dependencies, then generates each file by calling the LLM with the task description and the contents of dependency files as context. |
 | **Validator** | `agent/src/validator.ts` | Runs `tsc --noEmit` and `vitest run` in the generated app directory. Parses error output and returns a structured `{ passed, errors[], rawOutput }` result. |
-| **Fixer** | `agent/src/fixer.ts` | For each file mentioned in validation errors, sends the file content + errors to Claude with a "fix this file" prompt. Overwrites the file with the corrected version. |
+| **Fixer** | `agent/src/fixer.ts` | For each file mentioned in validation errors, sends the file content + errors to the LLM with a "fix this file" prompt. Overwrites the file with the corrected version. The fix loop runs up to 3 passes, re-validating after each pass. |
 
 ### Context Management
 
@@ -54,7 +55,7 @@ spec.txt
 ### Prerequisites
 
 - Node.js 18+
-- An Anthropic API key
+- An Anthropic API key **or** an OpenAI API key (depending on which provider you choose)
 
 ### Setup
 
@@ -66,7 +67,7 @@ npm install
 cd agent
 npm install
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env — add your API key(s) and set LLM_PROVIDER (anthropic or openai)
 
 # 3. Run the agent (from the agent/ directory)
 npm run generate
@@ -99,17 +100,28 @@ npm run typecheck # runs tsc --noEmit
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Your Anthropic API key (required) |
+| `LLM_PROVIDER` | LLM provider to use: `anthropic` (default) or `openai` |
+| `ANTHROPIC_API_KEY` | Your Anthropic API key (required when `LLM_PROVIDER=anthropic`) |
+| `OPENAI_API_KEY` | Your OpenAI API key (required when `LLM_PROVIDER=openai`) |
 
 ## LLM Choices
 
-### Why Claude
+### Multi-Provider Support
+
+The agent dynamically supports multiple LLM providers via the `LLM_PROVIDER` environment variable. All LLM calls go through a single `callLLM()` function in `agent/src/llm.ts`, making it straightforward to add new providers — just handle an additional case in that function.
+
+| Provider | Model | Set via |
+|----------|-------|---------|
+| **Anthropic** (default) | `claude-sonnet-4-20250514` | `LLM_PROVIDER=anthropic` |
+| **OpenAI** | `gpt-4o` | `LLM_PROVIDER=openai` |
+
+### Why Claude as Default
 
 Claude excels at following structured output instructions (e.g., "respond with ONLY JSON, no markdown") which is critical for an agentic code generation pipeline where responses must be machine-parseable. Its large context window (200k tokens) also supports passing multiple dependency files as context without truncation in most cases.
 
-### Model Selection
+### Model Selection (Anthropic)
 
-The agent uses **`claude-sonnet-4-20250514`** for all API calls (planning, generation, fixing). Sonnet was chosen as the best balance of:
+When using Anthropic, the agent uses **`claude-sonnet-4-20250514`**. Sonnet was chosen as the best balance of:
 
 - **Quality**: Produces correct, well-structured React/TypeScript code with proper imports and type safety
 - **Speed**: Significantly faster than Opus, which matters when making 20+ sequential API calls per run
@@ -121,31 +133,29 @@ Opus would produce marginally better code but at 10x the cost and 3-4x the laten
 
 ### Current Tradeoffs
 
-- **Single retry**: The fixer only gets one pass. Some multi-file errors (e.g., mismatched imports across files) can't be fixed by patching individual files in isolation
 - **No cross-file awareness in fixer**: The fixer sees one file at a time. If file A imports from file B incorrectly, the fixer can only fix A's code, not coordinate changes across both
 - **Planner non-determinism**: Each run produces a different task plan. The number and granularity of tasks varies, which affects downstream code quality
 - **Generated package.json**: The generator may produce a package.json with different dependency versions than the boilerplate, requiring manual reconciliation
 
 ### What I'd Improve With More Time
 
-- **Multi-pass fix loop**: Allow 2-3 retry rounds instead of 1, with diminishing returns detection
-- **Cross-file fixer**: Pass all failing files + their errors in a single Claude call for coordinated fixes
-- **Structured output**: Use Claude's tool_use/JSON mode instead of free-text with "respond only in JSON" instructions
+- **Cross-file fixer**: Pass all failing files + their errors in a single LLM call for coordinated fixes
+- **Structured output**: Use provider-native JSON modes (Claude's tool_use, OpenAI's response_format) instead of free-text with "respond only in JSON" instructions
 - **Incremental generation**: Skip re-generating files that already pass validation
-- **Caching**: Cache Claude responses by task hash to avoid re-generating identical tasks across runs
+- **Caching**: Cache LLM responses by task hash to avoid re-generating identical tasks across runs
 - **Parallel generation**: Generate independent tasks (those with no shared dependencies) concurrently
 - **Pinned task plan**: Allow saving/loading a task plan to ensure deterministic generation across runs
 
 ## Approximate Cost Per Run
 
-| Phase | API Calls | Avg Input Tokens | Avg Output Tokens | Estimated Cost |
-|-------|-----------|-----------------|-------------------|----------------|
+| Phase | API Calls | Avg Input Tokens | Avg Output Tokens | Estimated Cost (Claude) |
+|-------|-----------|-----------------|-------------------|-------------------------|
 | Planner | 1 | ~2,000 | ~2,500 | $0.04 |
 | Generator | ~18-20 | ~1,500 avg | ~3,000 avg | $1.00 |
-| Fixer | 1-3 | ~2,000 avg | ~3,000 avg | $0.15 |
-| **Total** | **~22** | | | **~$1.20** |
+| Fixer | 1-9 (up to 3 passes) | ~2,000 avg | ~3,000 avg | $0.15-$0.45 |
+| **Total** | **~22-30** | | | **~$1.20-$1.50** |
 
-Costs based on `claude-sonnet-4-20250514` pricing: $3/M input tokens, $15/M output tokens. Actual costs vary by run due to non-deterministic planning.
+Costs based on `claude-sonnet-4-20250514` pricing: $3/M input tokens, $15/M output tokens. Actual costs vary by run due to non-deterministic planning. OpenAI costs will differ based on `gpt-4o` pricing.
 
 ## Project Structure
 
@@ -163,6 +173,7 @@ BIMM/
 │   ├── .env.example
 │   └── src/
 │       ├── index.ts       ← CLI entrypoint (orchestrator)
+│       ├── llm.ts         ← unified LLM calling layer
 │       ├── planner.ts     ← spec → task list
 │       ├── generator.ts   ← task list → generated code
 │       ├── validator.ts   ← tsc + vitest runner

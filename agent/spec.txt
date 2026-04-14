@@ -1,54 +1,52 @@
-Book Library Manager — Feature Spec
+Car Inventory Manager — Feature Spec
 
-A React + TypeScript single-page application for browsing and managing a personal book library. Built with Vite, MUI, Apollo Client, and MSW for mock GraphQL.
+A React + TypeScript single-page application for browsing and managing a car inventory. Built with Vite, MUI, Apollo Client, and MSW for mock GraphQL.
 
 ## Data Model
 
-Each book has: id, title, author, genre, year, pages (number), read (boolean), and cover (URL string).
+Each car has: id, make, model, year, color, and three image URLs (mobile, tablet, desktop).
 
 ## Features
 
-### 1. Books List (GraphQL + MSW Mock API)
-- Use Apollo Client to fetch books via a `GET_BOOKS` GraphQL query.
-- Mock the GraphQL API using MSW with a handler that returns a static list of at least 5 sample books.
-- Display the list of books as MUI Cards in a responsive grid layout.
+### 1. Cars List (GraphQL + MSW Mock API)
+- Use Apollo Client to fetch cars via a `GET_CARS` GraphQL query.
+- Mock the GraphQL API using MSW with a handler that returns a static list of at least 5 sample cars.
+- Display the list of cars as MUI Cards in a responsive grid layout.
 
 ### 2. Responsive Images
-- Each book card displays a cover image that adapts to viewport width:
-  - Mobile (≤640px): images render at full width of card
-  - Tablet (641–1023px): images render at medium size within a 2-column grid
-  - Desktop (≥1024px): images render at fixed size within a 3- or 4-column grid
+- Each car card displays an image that adapts to viewport width:
+  - Mobile (≤640px): use the mobile image URL
+  - Tablet (641–1023px): use the tablet image URL
+  - Desktop (≥1024px): use the desktop image URL
 - Use MUI's `useMediaQuery` or responsive Grid props for breakpoints.
 
-### 3. MUI Book Cards
-- Each card shows: title, author, genre, year, pages, read status, and cover image.
+### 3. MUI Car Cards
+- Each card shows: make, model, year, color, and image.
 - Use MUI `Card`, `CardMedia`, `CardContent`, and `Typography` components.
-- Show a MUI `Chip` indicating whether the book has been read or unread.
-- Show page count with a small book icon.
+- Show a small color swatch or MUI `Chip` for the car's color.
 
-### 4. Add Book Form (GraphQL Mutation)
-- A form (dialog or inline) to add a new book with fields: title, author, genre, year, pages, read, cover URL.
-- Submits via an `ADD_BOOK` GraphQL mutation.
-- Mock the mutation in MSW to append the new book to the in-memory list.
-- On success, the books list updates to include the new book.
+### 4. Add Car Form (GraphQL Mutation)
+- A form (dialog or inline) to add a new car with fields: make, model, year, color, mobile image URL, tablet image URL, desktop image URL.
+- Submits via an `ADD_CAR` GraphQL mutation.
+- Mock the mutation in MSW to append the new car to the in-memory list.
+- On success, the cars list updates to include the new car.
 
 ### 5. Search and Sort
-- A search input that filters the displayed books by title or author (case-insensitive substring match).
-- Sort controls to sort by year (ascending/descending), pages (short to long), or author (alphabetical).
-- A toggle to filter by read vs unread vs all.
+- A search input that filters the displayed cars by model (case-insensitive substring match).
+- Sort controls to sort by year (ascending/descending) or make (alphabetical).
 - Filtering and sorting operate on the client side over the fetched data.
 
-### 6. useBooks() Custom Hook
-- Encapsulate all GraphQL logic (query, mutation, cache update) in a `useBooks()` custom hook.
-- The hook returns: `{ books, loading, error, addBook, refetch }`.
+### 6. useCars() Custom Hook
+- Encapsulate all GraphQL logic (query, mutation, cache update) in a `useCars()` custom hook.
+- The hook returns: `{ cars, loading, error, addCar, refetch }`.
 - Components consume this hook instead of calling Apollo directly.
 
 ### 7. Unit Tests
-- Test the books list rendering with mocked Apollo provider.
-- Test the Add Book form submission and list update.
+- Test the cars list rendering with mocked Apollo provider.
+- Test the Add Car form submission and list update.
 - Test search filtering and sort behavior.
-- Test the useBooks() hook using renderHook with a mocked provider.
-- Use Vitest + React Testing Library for tests.
+- Test the useCars() hook using renderHook with a mocked provider.
+- Use Vitest + React Testing Library.
 
 ## Tech Stack
 - React 19, TypeScript, Vite

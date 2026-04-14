@@ -1,11 +1,9 @@
-import { useState } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline, AppBar, Toolbar, Typography, Button, Container, Box } from '@mui/material';
+import React from 'react';
 import { ApolloProvider } from '@apollo/client';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { CssBaseline, Container, Typography, Box } from '@mui/material';
 import { client } from '@/graphql/client';
-import { BooksList } from '@/components/BooksList';
-import { AddBookForm } from '@/components/AddBookForm';
-import AddIcon from '@mui/icons-material/Add';
+import CarsList from '@/components/CarsList';
 
 const theme = createTheme({
   palette: {
@@ -18,44 +16,25 @@ const theme = createTheme({
   },
 });
 
-function App() {
-  const [addBookOpen, setAddBookOpen] = useState(false);
-
-  const handleAddBookOpen = () => {
-    setAddBookOpen(true);
-  };
-
-  const handleAddBookClose = () => {
-    setAddBookOpen(false);
-  };
-
+const App: React.FC = () => {
   return (
     <ApolloProvider client={client}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AppBar position="static">
-          <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              My Book Library
-            </Typography>
-            <Button
-              color="inherit"
-              startIcon={<AddIcon />}
-              onClick={handleAddBookOpen}
-            >
-              Add Book
-            </Button>
-          </Toolbar>
-        </AppBar>
         <Container maxWidth="xl">
-          <Box sx={{ mt: 4, mb: 4 }}>
-            <BooksList />
+          <Box sx={{ py: 4 }}>
+            <Typography variant="h3" component="h1" gutterBottom align="center">
+              Car Collection
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary" align="center" sx={{ mb: 4 }}>
+              Browse and manage your favorite cars
+            </Typography>
+            <CarsList />
           </Box>
         </Container>
-        <AddBookForm open={addBookOpen} onClose={handleAddBookClose} />
       </ThemeProvider>
     </ApolloProvider>
   );
-}
+};
 
 export default App;

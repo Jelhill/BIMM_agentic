@@ -1,21 +1,12 @@
-export interface Book {
-  id: string;
-  title: string;
-  author: string;
-  genre: string;
-  year: number;
-  pages: number;
-  read: boolean;
-  cover: string;
-}
-
-export type BookInput = Omit<Book, 'id'>;
-
 export interface Car {
   id: string;
   make: string;
   model: string;
   year: number;
   color: string;
-  price: number;
+  mobileImage: string;
+  tabletImage: string;
+  desktopImage: string;
 }
+
+export type CarInput = Omit<Car, 'id'>;

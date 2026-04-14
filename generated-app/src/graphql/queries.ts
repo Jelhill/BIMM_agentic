@@ -8,20 +8,24 @@ export const GET_CARS = gql`
       model
       year
       color
-      price
+      mobileImage
+      tabletImage
+      desktopImage
     }
   }
 `;
 
 export const GET_CAR = gql`
-  query GetCar($id: String!) {
+  query GetCar($id: ID!) {
     car(id: $id) {
       id
       make
       model
       year
       color
-      price
+      mobileImage
+      tabletImage
+      desktopImage
     }
   }
 `;
@@ -34,37 +38,9 @@ export const ADD_CAR = gql`
       model
       year
       color
-      price
-    }
-  }
-`;
-
-export const GET_BOOKS = gql`
-  query GetBooks {
-    books {
-      id
-      title
-      author
-      genre
-      year
-      pages
-      read
-      cover
-    }
-  }
-`;
-
-export const ADD_BOOK = gql`
-  mutation AddBook($input: BookInput!) {
-    addBook(input: $input) {
-      id
-      title
-      author
-      genre
-      year
-      pages
-      read
-      cover
+      mobileImage
+      tabletImage
+      desktopImage
     }
   }
 `;
