@@ -12,6 +12,8 @@ export interface AgentConfig {
   anthropicApiKey: string;
 }
 
+export type LLMProvider = "anthropic" | "openai";
+
 export interface ValidationResult {
   passed: boolean;
   errors: string[];

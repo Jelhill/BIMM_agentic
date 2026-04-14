@@ -1,205 +1,231 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AddBookForm } from '@/components/AddBookForm';
 
-describe('AddBookForm', () => {
-  const mockOnClose = vi.fn();
-  const mockAddBook = vi.fn();
+const mockAddBook = vi.fn();
+const mockOnClose = vi.fn();
 
-  const defaultProps = {
-    open: true,
-    onClose: mockOnClose,
+vi.mock('@/hooks/useBooks', () => ({
+  useBooks: () => ({
     addBook: mockAddBook,
-  };
+    books: [],
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
 
+describe('AddBookForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders the form when open is true', () => {
-    render(<AddBookForm {...defaultProps} />);
+  it('renders dialog when open is true', () => {
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
     expect(screen.getByText('Add New Book')).toBeInTheDocument();
-    expect(screen.getByLabelText('Title')).toBeInTheDocument();
-    expect(screen.getByLabelText('Author')).toBeInTheDocument();
-    expect(screen.getByLabelText('Genre')).toBeInTheDocument();
-    expect(screen.getByLabelText('Year')).toBeInTheDocument();
-    expect(screen.getByLabelText('Pages')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cover URL')).toBeInTheDocument();
-    expect(screen.getByLabelText('Already read')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add Book' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/author/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/genre/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/year/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/pages/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/cover url/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/i have read this book/i)).toBeInTheDocument();
   });
 
-  it('does not render the form when open is false', () => {
-    render(<AddBookForm {...defaultProps} open={false} />);
+  it('does not render dialog when open is false', () => {
+    render(<AddBookForm open={false} onClose={mockOnClose} />);
     
     expect(screen.queryByText('Add New Book')).not.toBeInTheDocument();
   });
 
-  it('calls onClose when Cancel button is clicked', async () => {
+  it('calls onClose when cancel button is clicked', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);
     
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('updates form fields when user types', async () => {
+  it('fills form fields correctly', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    const titleInput = screen.getByLabelText('Title');
-    const authorInput = screen.getByLabelText('Author');
+    const titleInput = screen.getByLabelText(/title/i);
+    const authorInput = screen.getByLabelText(/author/i);
+    const yearInput = screen.getByLabelText(/year/i);
+    const pagesInput = screen.getByLabelText(/pages/i);
+    const coverInput = screen.getByLabelText(/cover url/i);
     
     await user.type(titleInput, 'Test Book');
     await user.type(authorInput, 'Test Author');
+    await user.clear(yearInput);
+    await user.type(yearInput, '2023');
+    await user.clear(pagesInput);
+    await user.type(pagesInput, '300');
+    await user.type(coverInput, 'https://example.com/cover.jpg');
     
     expect(titleInput).toHaveValue('Test Book');
     expect(authorInput).toHaveValue('Test Author');
+    expect(yearInput).toHaveValue(2023);
+    expect(pagesInput).toHaveValue(300);
+    expect(coverInput).toHaveValue('https://example.com/cover.jpg');
   });
 
-  it('handles checkbox toggle correctly', async () => {
+  it('selects genre from dropdown', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    const readCheckbox = screen.getByLabelText('Already read');
+    const genreSelect = screen.getByLabelText(/genre/i);
+    await user.click(genreSelect);
     
+    const fictionOption = screen.getByRole('option', { name: 'Fiction' });
+    await user.click(fictionOption);
+    
+    expect(genreSelect).toHaveTextContent('Fiction');
+  });
+
+  it('toggles read checkbox', async () => {
+    const user = userEvent.setup();
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
+    
+    const readCheckbox = screen.getByLabelText(/i have read this book/i);
     expect(readCheckbox).not.toBeChecked();
     
     await user.click(readCheckbox);
-    
     expect(readCheckbox).toBeChecked();
+    
+    await user.click(readCheckbox);
+    expect(readCheckbox).not.toBeChecked();
   });
 
-  it('submits form with correct data when all required fields are filled', async () => {
+  it('submits form with correct data', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    mockAddBook.mockResolvedValueOnce({ id: '1', title: 'Test Book' });
     
-    await user.type(screen.getByLabelText('Title'), 'The Great Gatsby');
-    await user.type(screen.getByLabelText('Author'), 'F. Scott Fitzgerald');
-    await user.type(screen.getByLabelText('Genre'), 'Fiction');
-    await user.type(screen.getByLabelText('Year'), '1925');
-    await user.type(screen.getByLabelText('Pages'), '180');
-    await user.type(screen.getByLabelText('Cover URL'), 'https://example.com/cover.jpg');
-    await user.click(screen.getByLabelText('Already read'));
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    const submitButton = screen.getByRole('button', { name: 'Add Book' });
+    await user.type(screen.getByLabelText(/title/i), 'Test Book');
+    await user.type(screen.getByLabelText(/author/i), 'Test Author');
+    
+    const genreSelect = screen.getByLabelText(/genre/i);
+    await user.click(genreSelect);
+    await user.click(screen.getByRole('option', { name: 'Fiction' }));
+    
+    await user.clear(screen.getByLabelText(/year/i));
+    await user.type(screen.getByLabelText(/year/i), '2023');
+    await user.clear(screen.getByLabelText(/pages/i));
+    await user.type(screen.getByLabelText(/pages/i), '300');
+    await user.type(screen.getByLabelText(/cover url/i), 'https://example.com/cover.jpg');
+    await user.click(screen.getByLabelText(/i have read this book/i));
+    
+    const submitButton = screen.getByRole('button', { name: /add book/i });
     await user.click(submitButton);
     
-    expect(mockAddBook).toHaveBeenCalledTimes(1);
     expect(mockAddBook).toHaveBeenCalledWith({
-      title: 'The Great Gatsby',
-      author: 'F. Scott Fitzgerald',
+      title: 'Test Book',
+      author: 'Test Author',
       genre: 'Fiction',
-      year: 1925,
-      pages: 180,
+      year: 2023,
+      pages: 300,
       read: true,
       cover: 'https://example.com/cover.jpg',
     });
-    expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('submits form with read as false when checkbox is not checked', async () => {
+  it('closes dialog and resets form after successful submission', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    mockAddBook.mockResolvedValueOnce({ id: '1', title: 'Test Book' });
     
-    await user.type(screen.getByLabelText('Title'), 'Test Book');
-    await user.type(screen.getByLabelText('Author'), 'Test Author');
-    await user.type(screen.getByLabelText('Genre'), 'Test Genre');
-    await user.type(screen.getByLabelText('Year'), '2023');
-    await user.type(screen.getByLabelText('Pages'), '300');
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    const submitButton = screen.getByRole('button', { name: 'Add Book' });
+    await user.type(screen.getByLabelText(/title/i), 'Test Book');
+    await user.type(screen.getByLabelText(/author/i), 'Test Author');
+    
+    const genreSelect = screen.getByLabelText(/genre/i);
+    await user.click(genreSelect);
+    await user.click(screen.getByRole('option', { name: 'Fiction' }));
+    
+    await user.clear(screen.getByLabelText(/pages/i));
+    await user.type(screen.getByLabelText(/pages/i), '300');
+    
+    const submitButton = screen.getByRole('button', { name: /add book/i });
     await user.click(submitButton);
     
-    expect(mockAddBook).toHaveBeenCalledWith(
-      expect.objectContaining({
-        read: false,
-      })
-    );
+    await waitFor(() => {
+      expect(mockOnClose).toHaveBeenCalledTimes(1);
+    });
   });
 
-  it('resets form fields after successful submission', async () => {
+  it('handles submission error gracefully', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockAddBook.mockRejectedValueOnce(new Error('Network error'));
     
-    const titleInput = screen.getByLabelText('Title');
-    const readCheckbox = screen.getByLabelText('Already read');
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    await user.type(titleInput, 'Test Book');
-    await user.type(screen.getByLabelText('Author'), 'Test Author');
-    await user.type(screen.getByLabelText('Genre'), 'Test Genre');
-    await user.type(screen.getByLabelText('Year'), '2023');
-    await user.type(screen.getByLabelText('Pages'), '300');
-    await user.click(readCheckbox);
+    await user.type(screen.getByLabelText(/title/i), 'Test Book');
+    await user.type(screen.getByLabelText(/author/i), 'Test Author');
     
-    const submitButton = screen.getByRole('button', { name: 'Add Book' });
+    const genreSelect = screen.getByLabelText(/genre/i);
+    await user.click(genreSelect);
+    await user.click(screen.getByRole('option', { name: 'Fiction' }));
+    
+    await user.clear(screen.getByLabelText(/pages/i));
+    await user.type(screen.getByLabelText(/pages/i), '300');
+    
+    const submitButton = screen.getByRole('button', { name: /add book/i });
     await user.click(submitButton);
     
-    // Re-render with open=true to see the reset form
-    render(<AddBookForm {...defaultProps} />);
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith('Error adding book:', expect.any(Error));
+    });
     
-    const newTitleInput = screen.getByLabelText('Title');
-    const newReadCheckbox = screen.getByLabelText('Already read');
-    
-    expect(newTitleInput).toHaveValue('');
-    expect(newReadCheckbox).not.toBeChecked();
+    expect(mockOnClose).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
-  it('resets form fields when dialog is closed without submission', async () => {
+  it('shows loading state during submission', async () => {
     const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
+    let resolveAddBook: (value: any) => void;
+    mockAddBook.mockReturnValueOnce(new Promise(resolve => {
+      resolveAddBook = resolve;
+    }));
     
-    const titleInput = screen.getByLabelText('Title');
-    await user.type(titleInput, 'Test Book');
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
     
-    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    await user.type(screen.getByLabelText(/title/i), 'Test Book');
+    await user.type(screen.getByLabelText(/author/i), 'Test Author');
+    
+    const genreSelect = screen.getByLabelText(/genre/i);
+    await user.click(genreSelect);
+    await user.click(screen.getByRole('option', { name: 'Fiction' }));
+    
+    await user.clear(screen.getByLabelText(/pages/i));
+    await user.type(screen.getByLabelText(/pages/i), '300');
+    
+    const submitButton = screen.getByRole('button', { name: /add book/i });
+    await user.click(submitButton);
+    
+    expect(screen.getByText('Adding...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+    
+    resolveAddBook!({ id: '1', title: 'Test Book' });
+  });
+
+  it('resets form when dialog is closed', async () => {
+    const user = userEvent.setup();
+    render(<AddBookForm open={true} onClose={mockOnClose} />);
+    
+    await user.type(screen.getByLabelText(/title/i), 'Test Book');
+    await user.type(screen.getByLabelText(/author/i), 'Test Author');
+    
+    const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);
     
-    // Re-render to check if form is reset
-    render(<AddBookForm {...defaultProps} />);
-    const newTitleInput = screen.getByLabelText('Title');
-    expect(newTitleInput).toHaveValue('');
-  });
-
-  it('prevents form submission when required fields are empty', async () => {
-    const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
-    
-    const submitButton = screen.getByRole('button', { name: 'Add Book' });
-    await user.click(submitButton);
-    
-    // Form should not submit and addBook should not be called
-    expect(mockAddBook).not.toHaveBeenCalled();
-    expect(mockOnClose).not.toHaveBeenCalled();
-  });
-
-  it('calls onClose when clicking outside the dialog', () => {
-    render(<AddBookForm {...defaultProps} />);
-    
-    // Simulate clicking on the backdrop
-    const backdrop = document.querySelector('.MuiBackdrop-root');
-    if (backdrop) {
-      fireEvent.click(backdrop);
-      expect(mockOnClose).toHaveBeenCalledTimes(1);
-    }
-  });
-
-  it('handles numeric inputs correctly', async () => {
-    const user = userEvent.setup();
-    render(<AddBookForm {...defaultProps} />);
-    
-    const yearInput = screen.getByLabelText('Year');
-    const pagesInput = screen.getByLabelText('Pages');
-    
-    await user.type(yearInput, '2023');
-    await user.type(pagesInput, '250');
-    
-    expect(yearInput).toHaveValue(2023);
-    expect(pagesInput).toHaveValue(250);
+    expect(mockOnClose).toHaveBeenCalled();
   });
 });

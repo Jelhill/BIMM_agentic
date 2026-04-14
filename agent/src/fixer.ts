@@ -1,4 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { callLLM } from "./llm.js";
 import { logger } from "./logger.js";
 
 const FIXER_SYSTEM_PROMPT = `You are a senior React/TypeScript developer fixing code errors.
@@ -10,6 +12,7 @@ CRITICAL RULES:
 - The first line of your response should be the first line of the file.
 - The last line of your response should be the last line of the file.
 - Fix ALL the listed errors while preserving the file's original purpose and structure.
+- When errors involve mismatches with other files (wrong imports, wrong types), use the related file contents provided to ensure compatibility.
 
 TECHNOLOGY STACK (fixes must comply with these):
 - Vitest for testing: use vi.mock, vi.fn, vi.spyOn from "vitest". NEVER use jest.mock/jest.fn.
@@ -19,16 +22,67 @@ TECHNOLOGY STACK (fixes must comply with these):
 - Import alias: "@/" maps to "src/" (e.g. import Foo from "@/components/Foo").
 - If a file has JSX (including test files that render components), it MUST use .tsx extension.`;
 
+/**
+ * Extract import paths from a file's content and resolve them to actual files.
+ * Returns the content of related files so the fixer has cross-file context.
+ */
+function gatherRelatedFileContext(
+  filePath: string,
+  fileContent: string,
+  projectPath: string
+): string {
+  const contextParts: string[] = [];
+  // Match @/ alias imports and relative imports
+  const importRegex = /from\s+["'](@\/[^"']+|\.\.?\/[^"']+)["']/g;
+  const seen = new Set<string>();
+
+  for (const match of fileContent.matchAll(importRegex)) {
+    let importPath = match[1];
+
+    // Resolve @/ alias to src/
+    if (importPath.startsWith("@/")) {
+      importPath = "src/" + importPath.slice(2);
+    }
+
+    // Try common extensions
+    const extensions = ["", ".ts", ".tsx", ".js", ".jsx"];
+    for (const ext of extensions) {
+      const candidate = join(projectPath, importPath + ext);
+      if (!seen.has(candidate) && existsSync(candidate)) {
+        seen.add(candidate);
+        const content = readFileSync(candidate, "utf-8");
+        const lines = content.split("\n");
+        const truncated =
+          lines.length > 150
+            ? lines.slice(0, 150).join("\n") + "\n// ...truncated"
+            : content;
+        const relPath = candidate.slice(projectPath.length + 1);
+        contextParts.push(
+          `--- Related file: ${relPath} ---\n${truncated}\n--- End of ${relPath} ---`
+        );
+        break;
+      }
+    }
+  }
+
+  return contextParts.join("\n\n");
+}
+
 export async function fixFile(
   filePath: string,
   fileContent: string,
-  errors: string[]
+  errors: string[],
+  projectPath?: string
 ): Promise<string> {
-  const client = new Anthropic();
-
   logger.info(`Fixing: ${filePath}`);
 
-  const userPrompt = `Fix the following file to resolve these errors.
+  // Gather context from files that the broken file imports
+  let relatedContext = "";
+  if (projectPath) {
+    relatedContext = gatherRelatedFileContext(filePath, fileContent, projectPath);
+  }
+
+  let userPrompt = `${FIXER_SYSTEM_PROMPT}\n\nFix the following file to resolve these errors.
 
 File: ${filePath}
 
@@ -38,20 +92,14 @@ ${errors.map((e) => `- ${e}`).join("\n")}
 Current file content:
 ${fileContent}`;
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 8192,
-    system: FIXER_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const content = message.content[0];
-  if (content.type !== "text") {
-    throw new Error(`Unexpected response type fixing ${filePath}`);
+  if (relatedContext) {
+    userPrompt += `\n\nHere are the related files this file imports (use these to ensure correct types, exports, and interfaces):\n\n${relatedContext}`;
   }
 
+  const response = await callLLM(userPrompt);
+
   // Strip markdown fences if accidentally added
-  let code = content.text;
+  let code = response;
   if (code.startsWith("```")) {
     const lines = code.split("\n");
     lines.shift();

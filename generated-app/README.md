@@ -72,7 +72,7 @@ cp .env.example .env
 npm run generate
 
 # Or with a custom spec file:
-# npm run dev -- --spec ./my-other-spec.txt
+npm run dev -- --spec ./my-other-spec.txt
 
 # NOTE: Steps 2-3 must be run from inside the agent/ directory.
 # The agent will generate output into ../generated-app relative to agent/.

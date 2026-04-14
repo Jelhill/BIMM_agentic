@@ -9,6 +9,8 @@ export interface Book {
   cover: string;
 }
 
+export type BookInput = Omit<Book, 'id'>;
+
 export interface Car {
   id: string;
   make: string;

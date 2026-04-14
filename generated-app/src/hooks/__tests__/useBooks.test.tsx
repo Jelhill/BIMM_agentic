@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
-import { ReactNode } from 'react';
+import { GraphQLError } from 'graphql';
 import { useBooks } from '@/hooks/useBooks';
 import { GET_BOOKS, ADD_BOOK } from '@/graphql/queries';
-import type { Book } from '@/types';
+import type { Book, BookInput } from '@/types';
+import { ReactNode } from 'react';
 
 const mockBooks: Book[] = [
   {
@@ -15,7 +16,7 @@ const mockBooks: Book[] = [
     year: 1925,
     pages: 180,
     read: true,
-    cover: 'https://example.com/gatsby.jpg',
+    cover: 'gatsby.jpg',
   },
   {
     id: '2',
@@ -25,21 +26,21 @@ const mockBooks: Book[] = [
     year: 1949,
     pages: 328,
     read: false,
-    cover: 'https://example.com/1984.jpg',
+    cover: '1984.jpg',
   },
 ];
 
-const newBook = {
+const newBook: BookInput = {
   title: 'To Kill a Mockingbird',
   author: 'Harper Lee',
   genre: 'Fiction',
   year: 1960,
   pages: 281,
   read: false,
-  cover: 'https://example.com/mockingbird.jpg',
+  cover: 'mockingbird.jpg',
 };
 
-const addedBook: Book = {
+const newBookWithId: Book = {
   id: '3',
   ...newBook,
 };
@@ -57,7 +58,7 @@ describe('useBooks', () => {
     vi.clearAllMocks();
   });
 
-  it('should return loading state initially', async () => {
+  it('should return loading state initially', () => {
     const mocks = [
       {
         request: {
@@ -80,7 +81,7 @@ describe('useBooks', () => {
     expect(result.current.error).toBeUndefined();
   });
 
-  it('should fetch books successfully', async () => {
+  it('should return books data on successful fetch', async () => {
     const mocks = [
       {
         request: {
@@ -107,18 +108,17 @@ describe('useBooks', () => {
   });
 
   it('should handle error state', async () => {
-    const errorMessage = 'Failed to fetch books';
-    const mocks = [
+    const errorMocks = [
       {
         request: {
           query: GET_BOOKS,
         },
-        error: new Error(errorMessage),
+        error: new Error('Network error'),
       },
     ];
 
     const { result } = renderHook(() => useBooks(), {
-      wrapper: createWrapper(mocks),
+      wrapper: createWrapper(errorMocks),
     });
 
     await waitFor(() => {
@@ -127,10 +127,34 @@ describe('useBooks', () => {
 
     expect(result.current.books).toEqual([]);
     expect(result.current.error).toBeDefined();
-    expect(result.current.error?.message).toBe(errorMessage);
+    expect(result.current.error?.message).toBe('Network error');
   });
 
-  it('should add a book successfully', async () => {
+  it('should handle GraphQL errors', async () => {
+    const errorMocks = [
+      {
+        request: {
+          query: GET_BOOKS,
+        },
+        result: {
+          errors: [new GraphQLError('GraphQL error')],
+        },
+      },
+    ];
+
+    const { result } = renderHook(() => useBooks(), {
+      wrapper: createWrapper(errorMocks),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.books).toEqual([]);
+    expect(result.current.error).toBeDefined();
+  });
+
+  it('should add a book and update cache', async () => {
     const mocks = [
       {
         request: {
@@ -151,7 +175,7 @@ describe('useBooks', () => {
         },
         result: {
           data: {
-            addBook: addedBook,
+            addBook: newBookWithId,
           },
         },
       },
@@ -167,13 +191,16 @@ describe('useBooks', () => {
 
     expect(result.current.books).toEqual(mockBooks);
 
-    const addedBookResult = await result.current.addBook(newBook);
+    const addedBook = await result.current.addBook(newBook);
 
-    expect(addedBookResult).toEqual(addedBook);
+    expect(addedBook).toEqual(newBookWithId);
+    
+    await waitFor(() => {
+      expect(result.current.books).toEqual([...mockBooks, newBookWithId]);
+    });
   });
 
-  it('should handle add book error', async () => {
-    const errorMessage = 'Failed to add book';
+  it('should handle addBook mutation error', async () => {
     const mocks = [
       {
         request: {
@@ -192,7 +219,7 @@ describe('useBooks', () => {
             input: newBook,
           },
         },
-        error: new Error(errorMessage),
+        error: new Error('Failed to add book'),
       },
     ];
 
@@ -204,7 +231,7 @@ describe('useBooks', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    await expect(result.current.addBook(newBook)).rejects.toThrow(errorMessage);
+    await expect(result.current.addBook(newBook)).rejects.toThrow('Failed to add book');
   });
 
   it('should provide refetch function', async () => {
@@ -219,51 +246,13 @@ describe('useBooks', () => {
           },
         },
       },
-    ];
-
-    const { result } = renderHook(() => useBooks(), {
-      wrapper: createWrapper(mocks),
-    });
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    expect(typeof result.current.refetch).toBe('function');
-  });
-
-  it('should update cache after adding book', async () => {
-    const mocks = [
       {
         request: {
           query: GET_BOOKS,
         },
         result: {
           data: {
-            books: mockBooks,
-          },
-        },
-      },
-      {
-        request: {
-          query: ADD_BOOK,
-          variables: {
-            input: newBook,
-          },
-        },
-        result: {
-          data: {
-            addBook: addedBook,
-          },
-        },
-      },
-      {
-        request: {
-          query: GET_BOOKS,
-        },
-        result: {
-          data: {
-            books: [...mockBooks, addedBook],
+            books: [...mockBooks, newBookWithId],
           },
         },
       },
@@ -278,13 +267,56 @@ describe('useBooks', () => {
     });
 
     expect(result.current.books).toEqual(mockBooks);
+    expect(typeof result.current.refetch).toBe('function');
 
-    await result.current.addBook(newBook);
+    await result.current.refetch();
 
-    // The cache should be updated automatically through the update function
-    // but we need to wait for the next render cycle
     await waitFor(() => {
-      expect(result.current.books).toEqual([...mockBooks, addedBook]);
+      expect(result.current.books).toEqual([...mockBooks, newBookWithId]);
+    });
+  });
+
+  it('should handle cache update when no existing data', async () => {
+    const mocks = [
+      {
+        request: {
+          query: GET_BOOKS,
+        },
+        result: {
+          data: {
+            books: [],
+          },
+        },
+      },
+      {
+        request: {
+          query: ADD_BOOK,
+          variables: {
+            input: newBook,
+          },
+        },
+        result: {
+          data: {
+            addBook: newBookWithId,
+          },
+        },
+      },
+    ];
+
+    const { result } = renderHook(() => useBooks(), {
+      wrapper: createWrapper(mocks),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const addedBook = await result.current.addBook(newBook);
+
+    expect(addedBook).toEqual(newBookWithId);
+    
+    await waitFor(() => {
+      expect(result.current.books).toEqual([newBookWithId]);
     });
   });
 });

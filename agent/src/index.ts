@@ -166,6 +166,7 @@ program
       logger.error("Failed to install dependencies — continuing with validation");
     }
 
+    const MAX_FIX_PASSES = 3;
     let result = await validate(outputPath);
 
     if (result.passed) {
@@ -175,26 +176,29 @@ program
       return;
     }
 
-    // Fix failing files
-    console.log("\n" + "=".repeat(60));
-    logger.info("Fixing errors...");
-    console.log("=".repeat(60) + "\n");
+    // Multi-pass fix loop: attempt up to MAX_FIX_PASSES fix iterations
+    for (let pass = 1; pass <= MAX_FIX_PASSES; pass++) {
+      console.log("\n" + "=".repeat(60));
+      logger.info(`Fix pass ${pass}/${MAX_FIX_PASSES}...`);
+      console.log("=".repeat(60) + "\n");
 
-    logger.error(`Found ${result.errors.length} error(s):`);
-    for (const err of result.errors.slice(0, 20)) {
-      console.log(`    ${err}`);
-    }
-
-    const failingFiles = extractFailingFiles(result.errors, outputPath);
-
-    if (failingFiles.length === 0) {
-      logger.error("Could not identify specific files to fix from error output");
-      logger.error("Raw output (last 50 lines):");
-      const rawLines = result.rawOutput.split("\n");
-      for (const line of rawLines.slice(-50)) {
-        console.log(`    ${line}`);
+      logger.error(`Found ${result.errors.length} error(s):`);
+      for (const err of result.errors.slice(0, 20)) {
+        console.log(`    ${err}`);
       }
-    } else {
+
+      const failingFiles = extractFailingFiles(result.errors, outputPath);
+
+      if (failingFiles.length === 0) {
+        logger.error("Could not identify specific files to fix from error output");
+        logger.error("Raw output (last 50 lines):");
+        const rawLines = result.rawOutput.split("\n");
+        for (const line of rawLines.slice(-50)) {
+          console.log(`    ${line}`);
+        }
+        break;
+      }
+
       logger.info(`Identified ${failingFiles.length} file(s) to fix`);
 
       for (const filePath of failingFiles) {
@@ -203,19 +207,23 @@ program
 
         // If no specific errors matched, pass all errors as context
         const errorsToSend = fileErrors.length > 0 ? fileErrors : result.errors;
-        const fixed = await fixFile(filePath, fileContent, errorsToSend);
+        const fixed = await fixFile(filePath, fileContent, errorsToSend, outputPath);
         writeFileSync(filePath, fixed, "utf-8");
       }
 
       // Post-fix: re-check for .ts files with JSX
       fixTsFilesWithJsx(outputPath);
 
-      // Retry validation
+      // Re-validate
       console.log("\n" + "=".repeat(60));
-      logger.info("Validation — Pass 2 (after fixes)");
+      logger.info(`Validation — Pass ${pass + 1} (after fix pass ${pass})`);
       console.log("=".repeat(60) + "\n");
 
       result = await validate(outputPath);
+
+      if (result.passed) {
+        break;
+      }
     }
 
     // Final result
@@ -223,7 +231,7 @@ program
     if (result.passed) {
       logger.success("All checks passed after fixes!");
     } else {
-      logger.error(`Validation still failing with ${result.errors.length} error(s)`);
+      logger.error(`Validation still failing after ${MAX_FIX_PASSES} fix passes with ${result.errors.length} error(s)`);
       for (const err of result.errors.slice(0, 20)) {
         console.log(`    ${err}`);
       }

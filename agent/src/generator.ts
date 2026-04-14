@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
+import { callLLM } from "./llm.js";
 import { logger } from "./logger.js";
 import type { Task } from "./types.js";
 
@@ -158,8 +158,6 @@ export async function generateCode(
   boilerplatePath: string,
   outputPath: string
 ): Promise<void> {
-  const client = new Anthropic();
-
   // Copy boilerplate into outputPath (entry-by-entry to avoid self-copy error)
   if (existsSync(outputPath)) {
     logger.info("Output directory already exists, overwriting...");
@@ -223,21 +221,11 @@ export async function generateCode(
       userPrompt += `\nHere are the dependency files you should reference:\n\n${context}`;
     }
 
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8192,
-      system: GENERATOR_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const fullPrompt = `${GENERATOR_SYSTEM_PROMPT}\n\n${userPrompt}`;
+    const response = await callLLM(fullPrompt);
 
-    const content = message.content[0];
-    if (content.type !== "text") {
-      logger.error(`Unexpected response for task ${task.id}`);
-      continue;
-    }
-
-    // Strip markdown fences if Claude accidentally adds them
-    let code = content.text;
+    // Strip markdown fences if LLM accidentally adds them
+    let code = response;
     if (code.startsWith("```")) {
       const lines = code.split("\n");
       lines.shift(); // remove opening fence

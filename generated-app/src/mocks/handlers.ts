@@ -1,57 +1,30 @@
 import { graphql, HttpResponse } from 'msw';
-import { seedBooks, seedCars, addBookToMockData } from '@/mocks/data';
+import { mockBooks } from '@/mocks/data';
+import { Book, BookInput } from '@/types';
+
+let books: Book[] = [...mockBooks];
 
 export const handlers = [
   graphql.query('GetBooks', () => {
     return HttpResponse.json({
       data: {
-        books: seedBooks
-      }
+        books,
+      },
     });
   }),
 
   graphql.mutation('AddBook', ({ variables }) => {
-    const { input } = variables as { input: any };
-    const newBook = addBookToMockData(input);
-    
-    return HttpResponse.json({
-      data: {
-        addBook: newBook
-      }
-    });
-  }),
-
-  graphql.query('GetCars', () => {
-    return HttpResponse.json({
-      data: {
-        cars: seedCars
-      }
-    });
-  }),
-
-  graphql.query('GetCar', ({ variables }) => {
-    const { id } = variables as { id: string };
-    const car = seedCars.find(car => car.id === id);
-    
-    return HttpResponse.json({
-      data: {
-        car
-      }
-    });
-  }),
-
-  graphql.mutation('AddCar', ({ variables }) => {
-    const { input } = variables as { input: any };
-    const newCar = {
+    const { input } = variables as { input: BookInput };
+    const newBook: Book = {
+      id: String(books.length + 1),
       ...input,
-      id: (seedCars.length + 1).toString()
     };
-    seedCars.push(newCar);
+    books.push(newBook);
     
     return HttpResponse.json({
       data: {
-        addCar: newCar
-      }
+        addBook: newBook,
+      },
     });
-  })
+  }),
 ];

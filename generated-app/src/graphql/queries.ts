@@ -14,7 +14,7 @@ export const GET_CARS = gql`
 `;
 
 export const GET_CAR = gql`
-  query GetCar($id: ID!) {
+  query GetCar($id: String!) {
     car(id: $id) {
       id
       make

@@ -1,11 +1,46 @@
-import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SearchAndSort } from '@/components/SearchAndSort';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { SearchAndSort, filterBooks, sortBooks, filterByReadStatus } from '@/components/SearchAndSort';
+import { Book } from '@/types';
+
+const mockBooks: Book[] = [
+  {
+    id: '1',
+    title: 'The Great Gatsby',
+    author: 'F. Scott Fitzgerald',
+    genre: 'Fiction',
+    year: 1925,
+    pages: 180,
+    read: true,
+    cover: 'gatsby.jpg'
+  },
+  {
+    id: '2',
+    title: '1984',
+    author: 'George Orwell',
+    genre: 'Dystopian',
+    year: 1949,
+    pages: 328,
+    read: false,
+    cover: '1984.jpg'
+  },
+  {
+    id: '3',
+    title: 'To Kill a Mockingbird',
+    author: 'Harper Lee',
+    genre: 'Fiction',
+    year: 1960,
+    pages: 376,
+    read: true,
+    cover: 'mockingbird.jpg'
+  }
+];
 
 describe('SearchAndSort', () => {
   const mockOnSearchChange = vi.fn();
   const mockOnSortChange = vi.fn();
-  const mockOnFilterChange = vi.fn();
+  const mockOnReadFilterChange = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -16,129 +51,170 @@ describe('SearchAndSort', () => {
       <SearchAndSort
         onSearchChange={mockOnSearchChange}
         onSortChange={mockOnSortChange}
-        onFilterChange={mockOnFilterChange}
+        onReadFilterChange={mockOnReadFilterChange}
       />
     );
   };
 
-  it('renders search input with correct placeholder', () => {
+  it('renders all form elements correctly', () => {
     renderComponent();
-    
-    const searchInput = screen.getByPlaceholderText('Search by title or author...');
-    expect(searchInput).toBeInTheDocument();
+
+    expect(screen.getByRole('textbox', { name: /search by title or author/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /sort by/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /order/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /all books/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /read books/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /unread books/i })).toBeInTheDocument();
   });
 
-  it('renders sort dropdown with default value', () => {
+  it('calls onSearchChange when user types in search field', async () => {
+    const user = userEvent.setup();
     renderComponent();
-    
-    const sortSelect = screen.getByDisplayValue('Year (Newest first)');
-    expect(sortSelect).toBeInTheDocument();
+
+    const searchInput = screen.getByRole('textbox', { name: /search by title or author/i });
+    await user.type(searchInput, 'gatsby');
+
+    expect(mockOnSearchChange).toHaveBeenCalledWith('gatsby');
   });
 
-  it('renders filter toggle buttons with default selection', () => {
+  it('calls onSortChange when sort field is changed', async () => {
+    const user = userEvent.setup();
     renderComponent();
-    
-    const allBooksButton = screen.getByRole('button', { name: 'All Books' });
-    const readButton = screen.getByRole('button', { name: 'Read' });
-    const unreadButton = screen.getByRole('button', { name: 'Unread' });
-    
-    expect(allBooksButton).toBeInTheDocument();
-    expect(readButton).toBeInTheDocument();
-    expect(unreadButton).toBeInTheDocument();
-    expect(allBooksButton).toHaveAttribute('aria-pressed', 'true');
+
+    const sortSelect = screen.getByRole('combobox', { name: /sort by/i });
+    await user.click(sortSelect);
+    await user.click(screen.getByRole('option', { name: /pages/i }));
+
+    expect(mockOnSortChange).toHaveBeenCalledWith('pages', 'desc');
   });
 
-  it('calls onSearchChange when search input changes', () => {
+  it('calls onSortChange when sort order is changed', async () => {
+    const user = userEvent.setup();
     renderComponent();
-    
-    const searchInput = screen.getByPlaceholderText('Search by title or author...');
-    fireEvent.change(searchInput, { target: { value: 'test search' } });
-    
-    expect(mockOnSearchChange).toHaveBeenCalledTimes(1);
-    expect(mockOnSearchChange).toHaveBeenCalledWith('test search');
+
+    const orderSelect = screen.getByRole('combobox', { name: /order/i });
+    await user.click(orderSelect);
+    await user.click(screen.getByRole('option', { name: /ascending/i }));
+
+    expect(mockOnSortChange).toHaveBeenCalledWith('year', 'asc');
   });
 
-  it('calls onSortChange when sort option changes', () => {
+  it('calls onReadFilterChange when read status filter is changed', async () => {
+    const user = userEvent.setup();
     renderComponent();
-    
-    const sortSelect = screen.getByDisplayValue('Year (Newest first)');
-    fireEvent.mouseDown(sortSelect);
-    
-    const authorAscOption = screen.getByText('Author (A-Z)');
-    fireEvent.click(authorAscOption);
-    
-    expect(mockOnSortChange).toHaveBeenCalledTimes(1);
-    expect(mockOnSortChange).toHaveBeenCalledWith('author_asc');
+
+    const readButton = screen.getByRole('button', { name: /read books/i });
+    await user.click(readButton);
+
+    expect(mockOnReadFilterChange).toHaveBeenCalledWith('read');
   });
 
-  it('calls onFilterChange when filter toggle changes', () => {
+  it('calls onReadFilterChange when unread status filter is changed', async () => {
+    const user = userEvent.setup();
     renderComponent();
-    
-    const readButton = screen.getByRole('button', { name: 'Read' });
-    fireEvent.click(readButton);
-    
-    expect(mockOnFilterChange).toHaveBeenCalledTimes(1);
-    expect(mockOnFilterChange).toHaveBeenCalledWith('read');
+
+    const unreadButton = screen.getByRole('button', { name: /unread books/i });
+    await user.click(unreadButton);
+
+    expect(mockOnReadFilterChange).toHaveBeenCalledWith('unread');
+  });
+});
+
+describe('filterBooks', () => {
+  it('returns all books when search term is empty', () => {
+    const result = filterBooks(mockBooks, '');
+    expect(result).toEqual(mockBooks);
   });
 
-  it('updates search input value when typed', () => {
-    renderComponent();
-    
-    const searchInput = screen.getByPlaceholderText('Search by title or author...');
-    fireEvent.change(searchInput, { target: { value: 'Harry Potter' } });
-    
-    expect(searchInput).toHaveValue('Harry Potter');
+  it('filters books by title', () => {
+    const result = filterBooks(mockBooks, 'gatsby');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.title).toBe('The Great Gatsby');
   });
 
-  it('does not call onFilterChange when same filter is clicked', () => {
-    renderComponent();
-    
-    const allBooksButton = screen.getByRole('button', { name: 'All Books' });
-    fireEvent.click(allBooksButton);
-    
-    expect(mockOnFilterChange).not.toHaveBeenCalled();
+  it('filters books by author', () => {
+    const result = filterBooks(mockBooks, 'orwell');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.author).toBe('George Orwell');
   });
 
-  it('updates sort selection when different option is chosen', () => {
-    renderComponent();
-    
-    const sortSelect = screen.getByDisplayValue('Year (Newest first)');
-    fireEvent.mouseDown(sortSelect);
-    
-    const pagesDescOption = screen.getByText('Pages (Most first)');
-    fireEvent.click(pagesDescOption);
-    
-    expect(screen.getByDisplayValue('Pages (Most first)')).toBeInTheDocument();
+  it('performs case-insensitive search', () => {
+    const result = filterBooks(mockBooks, 'GATSBY');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.title).toBe('The Great Gatsby');
   });
 
-  it('updates filter selection when different filter is chosen', () => {
-    renderComponent();
-    
-    const unreadButton = screen.getByRole('button', { name: 'Unread' });
-    fireEvent.click(unreadButton);
-    
-    expect(unreadButton).toHaveAttribute('aria-pressed', 'true');
+  it('returns empty array when no matches found', () => {
+    const result = filterBooks(mockBooks, 'nonexistent');
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('sortBooks', () => {
+  it('sorts books by year in ascending order', () => {
+    const result = sortBooks(mockBooks, 'year', 'asc');
+    expect(result[0]!.year).toBe(1925);
+    expect(result[1]!.year).toBe(1949);
+    expect(result[2]!.year).toBe(1960);
   });
 
-  it('calls callbacks with correct types', () => {
-    renderComponent();
-    
-    // Test search callback
-    const searchInput = screen.getByPlaceholderText('Search by title or author...');
-    fireEvent.change(searchInput, { target: { value: 'test' } });
-    
-    // Test sort callback
-    const sortSelect = screen.getByDisplayValue('Year (Newest first)');
-    fireEvent.mouseDown(sortSelect);
-    const yearAscOption = screen.getByText('Year (Oldest first)');
-    fireEvent.click(yearAscOption);
-    
-    // Test filter callback
-    const readButton = screen.getByRole('button', { name: 'Read' });
-    fireEvent.click(readButton);
-    
-    expect(mockOnSearchChange).toHaveBeenCalledWith(expect.any(String));
-    expect(mockOnSortChange).toHaveBeenCalledWith(expect.any(String));
-    expect(mockOnFilterChange).toHaveBeenCalledWith(expect.any(String));
+  it('sorts books by year in descending order', () => {
+    const result = sortBooks(mockBooks, 'year', 'desc');
+    expect(result[0]!.year).toBe(1960);
+    expect(result[1]!.year).toBe(1949);
+    expect(result[2]!.year).toBe(1925);
+  });
+
+  it('sorts books by pages in ascending order', () => {
+    const result = sortBooks(mockBooks, 'pages', 'asc');
+    expect(result[0]!.pages).toBe(180);
+    expect(result[1]!.pages).toBe(328);
+    expect(result[2]!.pages).toBe(376);
+  });
+
+  it('sorts books by pages in descending order', () => {
+    const result = sortBooks(mockBooks, 'pages', 'desc');
+    expect(result[0]!.pages).toBe(376);
+    expect(result[1]!.pages).toBe(328);
+    expect(result[2]!.pages).toBe(180);
+  });
+
+  it('sorts books by author in ascending order', () => {
+    const result = sortBooks(mockBooks, 'author', 'asc');
+    expect(result[0]!.author).toBe('F. Scott Fitzgerald');
+    expect(result[1]!.author).toBe('George Orwell');
+    expect(result[2]!.author).toBe('Harper Lee');
+  });
+
+  it('sorts books by author in descending order', () => {
+    const result = sortBooks(mockBooks, 'author', 'desc');
+    expect(result[0]!.author).toBe('Harper Lee');
+    expect(result[1]!.author).toBe('George Orwell');
+    expect(result[2]!.author).toBe('F. Scott Fitzgerald');
+  });
+
+  it('does not mutate original array', () => {
+    const original = [...mockBooks];
+    sortBooks(mockBooks, 'year', 'asc');
+    expect(mockBooks).toEqual(original);
+  });
+});
+
+describe('filterByReadStatus', () => {
+  it('returns all books when filter is "all"', () => {
+    const result = filterByReadStatus(mockBooks, 'all');
+    expect(result).toEqual(mockBooks);
+  });
+
+  it('returns only read books when filter is "read"', () => {
+    const result = filterByReadStatus(mockBooks, 'read');
+    expect(result).toHaveLength(2);
+    expect(result.every(book => book.read)).toBe(true);
+  });
+
+  it('returns only unread books when filter is "unread"', () => {
+    const result = filterByReadStatus(mockBooks, 'unread');
+    expect(result).toHaveLength(1);
+    expect(result.every(book => !book.read)).toBe(true);
   });
 });

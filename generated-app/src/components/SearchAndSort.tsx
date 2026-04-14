@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   TextField,
@@ -8,28 +8,30 @@ import {
   MenuItem,
   ToggleButton,
   ToggleButtonGroup,
-  Typography,
-  SelectChangeEvent,
+  Typography
 } from '@mui/material';
-import Grid2 from '@mui/material/Grid2';
+import { SelectChangeEvent } from '@mui/material/Select';
+import { Book } from '@/types';
 
-export type SortOption = 'year_asc' | 'year_desc' | 'pages_asc' | 'pages_desc' | 'author_asc' | 'author_desc';
-export type FilterOption = 'all' | 'read' | 'unread';
+export type SortField = 'year' | 'pages' | 'author';
+export type SortOrder = 'asc' | 'desc';
+export type ReadFilter = 'all' | 'read' | 'unread';
 
 interface SearchAndSortProps {
   onSearchChange: (searchTerm: string) => void;
-  onSortChange: (sortOption: SortOption) => void;
-  onFilterChange: (filterOption: FilterOption) => void;
+  onSortChange: (field: SortField, order: SortOrder) => void;
+  onReadFilterChange: (filter: ReadFilter) => void;
 }
 
 export const SearchAndSort: React.FC<SearchAndSortProps> = ({
   onSearchChange,
   onSortChange,
-  onFilterChange,
+  onReadFilterChange
 }) => {
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [sortOption, setSortOption] = React.useState<SortOption>('year_desc');
-  const [filterOption, setFilterOption] = React.useState<FilterOption>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<SortField>('year');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [readFilter, setReadFilter] = useState<ReadFilter>('all');
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -37,74 +39,135 @@ export const SearchAndSort: React.FC<SearchAndSortProps> = ({
     onSearchChange(value);
   };
 
-  const handleSortChange = (event: SelectChangeEvent<SortOption>) => {
-    const value = event.target.value as SortOption;
-    setSortOption(value);
-    onSortChange(value);
+  const handleSortFieldChange = (event: SelectChangeEvent) => {
+    const field = event.target.value as SortField;
+    setSortField(field);
+    onSortChange(field, sortOrder);
   };
 
-  const handleFilterChange = (
+  const handleSortOrderChange = (event: SelectChangeEvent) => {
+    const order = event.target.value as SortOrder;
+    setSortOrder(order);
+    onSortChange(sortField, order);
+  };
+
+  const handleReadFilterChange = (
     _event: React.MouseEvent<HTMLElement>,
-    newFilter: FilterOption | null,
+    newFilter: ReadFilter
   ) => {
     if (newFilter !== null) {
-      setFilterOption(newFilter);
-      onFilterChange(newFilter);
+      setReadFilter(newFilter);
+      onReadFilterChange(newFilter);
     }
   };
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Grid2 container spacing={2} alignItems="center">
-        <Grid2 size={{ xs: 12, md: 4 }}>
-          <TextField
-            fullWidth
-            label="Search books"
-            placeholder="Search by title or author..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            variant="outlined"
-          />
-        </Grid2>
-        
-        <Grid2 size={{ xs: 12, md: 3 }}>
-          <FormControl fullWidth>
-            <InputLabel>Sort by</InputLabel>
-            <Select
-              value={sortOption}
-              label="Sort by"
-              onChange={handleSortChange}
-            >
-              <MenuItem value="year_desc">Year (Newest first)</MenuItem>
-              <MenuItem value="year_asc">Year (Oldest first)</MenuItem>
-              <MenuItem value="pages_asc">Pages (Fewest first)</MenuItem>
-              <MenuItem value="pages_desc">Pages (Most first)</MenuItem>
-              <MenuItem value="author_asc">Author (A-Z)</MenuItem>
-              <MenuItem value="author_desc">Author (Z-A)</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid2>
-        
-        <Grid2 size={{ xs: 12, md: 5 }}>
-          <Box>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              Read Status
-            </Typography>
-            <ToggleButtonGroup
-              value={filterOption}
-              exclusive
-              onChange={handleFilterChange}
-              size="small"
-            >
-              <ToggleButton value="all">All Books</ToggleButton>
-              <ToggleButton value="read">Read</ToggleButton>
-              <ToggleButton value="unread">Unread</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-        </Grid2>
-      </Grid2>
+      <Typography variant="h6" gutterBottom>
+        Search and Filter
+      </Typography>
+      
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <TextField
+          label="Search by title or author"
+          variant="outlined"
+          value={searchTerm}
+          onChange={handleSearchChange}
+          sx={{ minWidth: 250 }}
+        />
+
+        <FormControl sx={{ minWidth: 120 }}>
+          <InputLabel>Sort by</InputLabel>
+          <Select
+            value={sortField}
+            label="Sort by"
+            onChange={handleSortFieldChange}
+          >
+            <MenuItem value="year">Year</MenuItem>
+            <MenuItem value="pages">Pages</MenuItem>
+            <MenuItem value="author">Author</MenuItem>
+          </Select>
+        </FormControl>
+
+        <FormControl sx={{ minWidth: 120 }}>
+          <InputLabel>Order</InputLabel>
+          <Select
+            value={sortOrder}
+            label="Order"
+            onChange={handleSortOrderChange}
+          >
+            <MenuItem value="asc">Ascending</MenuItem>
+            <MenuItem value="desc">Descending</MenuItem>
+          </Select>
+        </FormControl>
+
+        <Box>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Read Status
+          </Typography>
+          <ToggleButtonGroup
+            value={readFilter}
+            exclusive
+            onChange={handleReadFilterChange}
+            aria-label="read status filter"
+          >
+            <ToggleButton value="all" aria-label="all books">
+              All
+            </ToggleButton>
+            <ToggleButton value="read" aria-label="read books">
+              Read
+            </ToggleButton>
+            <ToggleButton value="unread" aria-label="unread books">
+              Unread
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      </Box>
     </Box>
   );
+};
+
+export const filterBooks = (books: Book[], searchTerm: string): Book[] => {
+  if (!searchTerm) return books;
+  
+  const term = searchTerm.toLowerCase();
+  return books.filter(
+    book =>
+      book.title.toLowerCase().includes(term) ||
+      book.author.toLowerCase().includes(term)
+  );
+};
+
+export const sortBooks = (books: Book[], field: SortField, order: SortOrder): Book[] => {
+  return [...books].sort((a, b) => {
+    let comparison = 0;
+    
+    switch (field) {
+      case 'year':
+        comparison = a.year - b.year;
+        break;
+      case 'pages':
+        comparison = a.pages - b.pages;
+        break;
+      case 'author':
+        comparison = a.author.localeCompare(b.author);
+        break;
+    }
+    
+    return order === 'asc' ? comparison : -comparison;
+  });
+};
+
+export const filterByReadStatus = (books: Book[], filter: ReadFilter): Book[] => {
+  switch (filter) {
+    case 'read':
+      return books.filter(book => book.read);
+    case 'unread':
+      return books.filter(book => !book.read);
+    case 'all':
+    default:
+      return books;
+  }
 };
 
 export default SearchAndSort;

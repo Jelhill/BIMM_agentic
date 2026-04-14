@@ -1,13 +1,11 @@
-import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MockedProvider } from '@apollo/client/testing';
 import { describe, it, expect } from 'vitest';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { BooksList } from '@/components/BooksList';
-import { Book } from '@/types';
+import { GET_BOOKS } from '@/graphql/queries';
 
-const theme = createTheme();
-
-const mockBooks: Book[] = [
+const mockBooks = [
   {
     id: '1',
     title: 'The Great Gatsby',
@@ -16,115 +14,346 @@ const mockBooks: Book[] = [
     year: 1925,
     pages: 180,
     read: true,
-    cover: 'https://example.com/gatsby.jpg',
+    cover: 'https://example.com/gatsby.jpg'
   },
   {
     id: '2',
+    title: 'To Kill a Mockingbird',
+    author: 'Harper Lee',
+    genre: 'Fiction',
+    year: 1960,
+    pages: 281,
+    read: false,
+    cover: 'https://example.com/mockingbird.jpg'
+  },
+  {
+    id: '3',
     title: '1984',
     author: 'George Orwell',
     genre: 'Dystopian Fiction',
     year: 1949,
     pages: 328,
-    read: false,
-    cover: 'https://example.com/1984.jpg',
-  },
-  {
-    id: '3',
-    title: 'To Kill a Mockingbird',
-    author: 'Harper Lee',
-    genre: 'Fiction',
-    year: 1960,
-    pages: 376,
     read: true,
-    cover: 'https://example.com/mockingbird.jpg',
+    cover: 'https://example.com/1984.jpg'
+  }
+];
+
+const mocks = [
+  {
+    request: {
+      query: GET_BOOKS,
+    },
+    result: {
+      data: {
+        books: mockBooks,
+      },
+    },
   },
 ];
 
-const renderWithTheme = (component: React.ReactElement) => {
-  return render(
-    <ThemeProvider theme={theme}>
-      {component}
-    </ThemeProvider>
-  );
-};
+const errorMocks = [
+  {
+    request: {
+      query: GET_BOOKS,
+    },
+    error: new Error('Failed to fetch books'),
+  },
+];
+
+const loadingMocks = [
+  {
+    request: {
+      query: GET_BOOKS,
+    },
+    delay: 1000,
+    result: {
+      data: {
+        books: mockBooks,
+      },
+    },
+  },
+];
+
+const emptyMocks = [
+  {
+    request: {
+      query: GET_BOOKS,
+    },
+    result: {
+      data: {
+        books: [],
+      },
+    },
+  },
+];
 
 describe('BooksList', () => {
-  it('renders book cards for each book', () => {
-    renderWithTheme(<BooksList books={mockBooks} />);
+  const user = userEvent.setup();
 
-    expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
-    expect(screen.getByText('1984')).toBeInTheDocument();
+  it('renders loading state initially', () => {
+    render(
+      <MockedProvider mocks={loadingMocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
+
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+  it('renders books after loading', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
     expect(screen.getByText('To Kill a Mockingbird')).toBeInTheDocument();
-
+    expect(screen.getByText('1984')).toBeInTheDocument();
     expect(screen.getByText('by F. Scott Fitzgerald')).toBeInTheDocument();
-    expect(screen.getByText('by George Orwell')).toBeInTheDocument();
     expect(screen.getByText('by Harper Lee')).toBeInTheDocument();
+    expect(screen.getByText('by George Orwell')).toBeInTheDocument();
   });
 
-  it('displays "No books found" message when books array is empty', () => {
-    renderWithTheme(<BooksList books={[]} />);
+  it('renders error state when query fails', async () => {
+    render(
+      <MockedProvider mocks={errorMocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    expect(screen.getByText('No books found')).toBeInTheDocument();
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Error loading books: Failed to fetch books/)).toBeInTheDocument();
+    });
   });
 
-  it('renders responsive grid container with correct spacing', () => {
-    const { container } = renderWithTheme(<BooksList books={mockBooks} />);
+  it('renders empty state when no books match criteria', async () => {
+    render(
+      <MockedProvider mocks={emptyMocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    const gridContainer = container.querySelector('.MuiGrid2-container');
-    expect(gridContainer).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('No books found matching your criteria.')).toBeInTheDocument();
+    });
   });
 
-  it('renders correct number of book cards', () => {
-    renderWithTheme(<BooksList books={mockBooks} />);
+  it('filters books by search term', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    const bookCards = screen.getAllByRole('img');
-    expect(bookCards).toHaveLength(mockBooks.length);
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText('Search by title or author');
+    await user.type(searchInput, 'Gatsby');
+
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+      expect(screen.queryByText('To Kill a Mockingbird')).not.toBeInTheDocument();
+      expect(screen.queryByText('1984')).not.toBeInTheDocument();
+    });
   });
 
-  it('displays book covers with correct alt text', () => {
-    renderWithTheme(<BooksList books={mockBooks} />);
+  it('filters books by author search', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    expect(screen.getByAltText('The Great Gatsby cover')).toBeInTheDocument();
-    expect(screen.getByAltText('1984 cover')).toBeInTheDocument();
-    expect(screen.getByAltText('To Kill a Mockingbird cover')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText('Search by title or author');
+    await user.type(searchInput, 'Orwell');
+
+    await waitFor(() => {
+      expect(screen.getByText('1984')).toBeInTheDocument();
+      expect(screen.queryByText('The Great Gatsby')).not.toBeInTheDocument();
+      expect(screen.queryByText('To Kill a Mockingbird')).not.toBeInTheDocument();
+    });
   });
 
-  it('displays book genres', () => {
-    renderWithTheme(<BooksList books={mockBooks} />);
+  it('sorts books by year in ascending order', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    expect(screen.getAllByText('Fiction')).toHaveLength(2);
-    expect(screen.getByText('Dystopian Fiction')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const sortOrderSelect = screen.getByLabelText('Order');
+    await user.click(sortOrderSelect);
+    await user.click(screen.getByRole('option', { name: 'Ascending' }));
+
+    await waitFor(() => {
+      const bookCards = screen.getAllByText(/^\d{4}$/);
+      expect(bookCards[0]).toHaveTextContent('1925');
+      expect(bookCards[1]).toHaveTextContent('1949');
+      expect(bookCards[2]).toHaveTextContent('1960');
+    });
   });
 
-  it('displays book years and page counts', () => {
-    renderWithTheme(<BooksList books={mockBooks} />);
+  it('sorts books by author', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    expect(screen.getByText('1925')).toBeInTheDocument();
-    expect(screen.getByText('1949')).toBeInTheDocument();
-    expect(screen.getByText('1960')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
 
-    expect(screen.getByText('180 pages')).toBeInTheDocument();
-    expect(screen.getByText('328 pages')).toBeInTheDocument();
-    expect(screen.getByText('376 pages')).toBeInTheDocument();
+    const sortFieldSelect = screen.getByLabelText('Sort by');
+    await user.click(sortFieldSelect);
+    await user.click(screen.getByRole('option', { name: 'Author' }));
+
+    await waitFor(() => {
+      const authorElements = screen.getAllByText(/^by /);
+      expect(authorElements[0]).toHaveTextContent('by Harper Lee');
+      expect(authorElements[1]).toHaveTextContent('by George Orwell');
+      expect(authorElements[2]).toHaveTextContent('by F. Scott Fitzgerald');
+    });
   });
 
-  it('displays read status chips', () => {
-    renderWithTheme(<BooksList books={mockBooks} />);
+  it('sorts books by pages', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    const readChips = screen.getAllByText('Read');
-    const unreadChips = screen.getAllByText('Unread');
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
 
-    expect(readChips).toHaveLength(2);
-    expect(unreadChips).toHaveLength(1);
+    const sortFieldSelect = screen.getByLabelText('Sort by');
+    await user.click(sortFieldSelect);
+    await user.click(screen.getByRole('option', { name: 'Pages' }));
+
+    await waitFor(() => {
+      const pageElements = screen.getAllByText(/\d+ pages/);
+      expect(pageElements[0]).toHaveTextContent('328 pages');
+      expect(pageElements[1]).toHaveTextContent('281 pages');
+      expect(pageElements[2]).toHaveTextContent('180 pages');
+    });
   });
 
-  it('handles single book correctly', () => {
-    const singleBook = [mockBooks[0]];
-    renderWithTheme(<BooksList books={singleBook} />);
+  it('filters books by read status - read only', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
 
-    expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
-    expect(screen.getByText('by F. Scott Fitzgerald')).toBeInTheDocument();
-    expect(screen.queryByText('1984')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const readButton = screen.getByRole('button', { name: 'read books' });
+    await user.click(readButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+      expect(screen.getByText('1984')).toBeInTheDocument();
+      expect(screen.queryByText('To Kill a Mockingbird')).not.toBeInTheDocument();
+    });
+  });
+
+  it('filters books by read status - unread only', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const unreadButton = screen.getByRole('button', { name: 'unread books' });
+    await user.click(unreadButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('To Kill a Mockingbird')).toBeInTheDocument();
+      expect(screen.queryByText('The Great Gatsby')).not.toBeInTheDocument();
+      expect(screen.queryByText('1984')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows no results message when search returns no matches', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText('Search by title or author');
+    await user.type(searchInput, 'nonexistent book');
+
+    await waitFor(() => {
+      expect(screen.getByText('No books found matching your criteria.')).toBeInTheDocument();
+      expect(screen.queryByText('The Great Gatsby')).not.toBeInTheDocument();
+    });
+  });
+
+  it('combines search and filter functionality', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('The Great Gatsby')).toBeInTheDocument();
+    });
+
+    const unreadButton = screen.getByRole('button', { name: 'unread books' });
+    await user.click(unreadButton);
+
+    const searchInput = screen.getByLabelText('Search by title or author');
+    await user.type(searchInput, 'Kill');
+
+    await waitFor(() => {
+      expect(screen.getByText('To Kill a Mockingbird')).toBeInTheDocument();
+      expect(screen.queryByText('The Great Gatsby')).not.toBeInTheDocument();
+      expect(screen.queryByText('1984')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders search and sort controls', async () => {
+    render(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <BooksList />
+      </MockedProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Search by title or author')).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Sort by')).toBeInTheDocument();
+    expect(screen.getByLabelText('Order')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'all books' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'read books' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'unread books' })).toBeInTheDocument();
   });
 });
